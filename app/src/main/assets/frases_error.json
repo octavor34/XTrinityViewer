@@ -1,0 +1,32 @@
+[
+  {
+    "message": "Tu fetiche no tiene poder aquí",
+    "subMessage": "Intenta buscar algo más normal...",
+    "icon": "ic_sick"
+  },
+  {
+    "message": "TU. ¡NO PASARÁS! (No hay resultados)",
+    "subMessage": "El mago oscuro bloqueó tu búsqueda.",
+    "icon": "ic_mago"
+  },
+  {
+    "message": "Error 404: Tu fetiche no fue encontrado",
+    "subMessage": "Busca algo menos enfermo..",
+    "icon": "ic_heart"
+  },
+  {
+    "message": "Eres un puerco sin suerte",
+    "subMessage": "Hoy no es tu día.",
+    "icon": "ic_cerdo"
+  },
+  {
+    "message": "Oni-chan... ni yo puedo con tus fetiches",
+    "subMessage": "¡porfavor vuelve alas Patas!!!",
+    "icon": "ic_onichancho"
+  },
+  {
+    "message": "Ah!!! un hombre de cultura",
+    "subMessage": "pero lamentablemente no",
+    "icon": "ic_cultura"
+  }
+]
