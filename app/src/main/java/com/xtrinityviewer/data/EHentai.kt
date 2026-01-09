@@ -12,13 +12,11 @@ object EHentaiModule {
     private const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     private val HEADERS = mapOf("User-Agent" to USER_AGENT, "Referer" to "https://e-hentai.org/")
 
-    // REGEXES
     private val URL_IN_STYLE_REGEX = Regex("""url\((.*?)\)""")
     private val WIDTH_REGEX = Regex("""width:\s*(\d+)px""")
     private val HEIGHT_REGEX = Regex("""height:\s*(\d+)px""")
     private val BG_POS_REGEX = Regex("""url\(.*?\).*?(-?\d+)(?:px)?\s+(-?\d+)(?:px)?""")
 
-    // --- HELPER PARA ARREGLAR URLS ---
     private fun fixUrl(rawUrl: String): String {
         var url = rawUrl.replace("\"", "").replace("'", "").trim()
         if (url.startsWith("//")) {
@@ -27,7 +25,6 @@ object EHentaiModule {
         return url
     }
 
-    // --- FEED PRINCIPAL ---
     suspend fun getGalleries(page: Int, query: String = ""): List<UnifiedPost> = withContext(Dispatchers.IO) {
 
         val finalQuery = query.trim().replace(" ", "+")
@@ -51,14 +48,12 @@ object EHentaiModule {
                 val title = glname.text()
                 val href = linkElement.attr("href")
 
-                // Miniaturas
                 var thumbUrl = ""
                 val imgElement = row.selectFirst(".gl2c img") ?: row.selectFirst(".gl1e img")
                 if (imgElement != null) {
                     thumbUrl = imgElement.attr("data-src").ifEmpty { imgElement.attr("src") }
                 }
 
-                // --- DETECCIÓN DE SPRITES (FEED) ---
                 var sWidth: Int? = null
                 var sHeight: Int? = null
                 var sX: Int? = null
@@ -70,7 +65,6 @@ object EHentaiModule {
 
                     val match = URL_IN_STYLE_REGEX.find(style)
                     if (match != null) {
-                        // AQUÍ ESTABA EL ERROR: Usamos fixUrl para añadir https:
                         thumbUrl = fixUrl(match.groupValues[1])
 
                         try {
@@ -117,7 +111,6 @@ object EHentaiModule {
         }
     }
 
-    // --- LECTOR DE PÁGINAS ---
     suspend fun getGalleryPageChunk(galleryUrl: String, pageIndex: Int): Triple<String, List<GalleryPageDto>, Int> = withContext(Dispatchers.IO) {
         try {
             val pagedUrl = if (pageIndex == 0) galleryUrl else "$galleryUrl?p=$pageIndex"

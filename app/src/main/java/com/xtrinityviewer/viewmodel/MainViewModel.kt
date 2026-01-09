@@ -12,7 +12,6 @@ import coil.imageLoader
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.xtrinityviewer.data.*
 import kotlinx.coroutines.Dispatchers
@@ -33,8 +32,6 @@ enum class FileFilter(val label: String, val tagToInject: String) {
     COUNT("POPULARES", "")
 }
 
-// [CAMBIO 1] Cambiamos a AndroidViewModel para tener acceso fácil al Contexto si hiciera falta,
-// aunque mantenemos tu estructura actual usando el context pasado desde la UI.
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var cachedChanBoards: List<AutocompleteDto> = emptyList()
@@ -75,10 +72,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val readerPosts = _readerPosts.asStateFlow()
     private val _readerIndex = MutableStateFlow(0)
     val readerIndex = _readerIndex.asStateFlow()
-    private var r34UserId = ""
-    private var r34ApiKey = ""
-    private var e621User = ""
-    private var e621ApiKey = ""
+    private val _startInGalleryMode = MutableStateFlow(false)
+    val startInGalleryMode = _startInGalleryMode.asStateFlow()
     var isBypassCancelled by mutableStateOf(false)
         private set
     private val _showBypassWebView = MutableStateFlow(false)
@@ -86,12 +81,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _errorState = MutableStateFlow<String?>(null)
     val errorState = _errorState.asStateFlow()
 
+
+    fun loadMoreReaderContent() {
+        if (_loading.value) {
+            Log.d("TrinityDebug", "Intento de carga ignorado: YA ESTÁ CARGANDO ALGO.")
+            return
+        }
+
+        viewModelScope.launch {
+            Log.d("TrinityDebug", "1. Iniciando 'loadMoreReaderContent'. Tamaño actual Feed: ${_feed.value.size}")
+
+            val job = loadContent()
+            if (job == null) {
+                Log.d("TrinityDebug", "2. loadContent devolvió null. (Quizás fin alcanzado o sin tags).")
+                return@launch
+            }
+
+            Log.d("TrinityDebug", "2. Esperando a que el servidor responda...")
+            job.join() // <--- ESTA ES LA CLAVE. Esperamos a que 'feed' se actualice.
+
+            Log.d("TrinityDebug", "3. Carga finalizada. Nuevo tamaño Feed: ${_feed.value.size}")
+
+            var currentList = _feed.value
+            val MAX_ITEMS = 150
+            val ITEMS_TO_TRIM = 50
+
+            if (currentList.size > MAX_ITEMS) {
+                Log.d("TrinityDebug", "4. Limpiando memoria (Exceso de items). Borrando $ITEMS_TO_TRIM antiguos.")
+                val trimmedList = currentList.drop(ITEMS_TO_TRIM)
+
+                _feed.value = trimmedList
+                _readerPosts.value = trimmedList
+
+                val newIndex = (_readerIndex.value - ITEMS_TO_TRIM).coerceAtLeast(0)
+                _readerIndex.value = newIndex
+                feedScrollIndex = (feedScrollIndex - ITEMS_TO_TRIM).coerceAtLeast(0)
+            } else {
+                Log.d("TrinityDebug", "4. Actualizando Lector sin borrar nada.")
+                _readerPosts.value = currentList
+            }
+            Toast.makeText(getApplication(), "Cargados: ${currentList.size} posts", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun reloadCredentials(context: Context) {
         val creds = SettingsStore.getCredentials(context)
-        r34UserId = creds["r34_user"] ?: ""
-        r34ApiKey = creds["r34_key"] ?: ""
-        e621User = creds["e621_user"] ?: ""
-        e621ApiKey = creds["e621_key"] ?: ""
+        SourceManager.updateCredentials(
+            r34User = creds["r34_user"] ?: "",
+            r34Key = creds["r34_key"] ?: "",
+            e621User = creds["e621_user"] ?: "",
+            e621Key = creds["e621_key"] ?: ""
+        )
         BlacklistManager.init(context)
         resetAndReload()
     }
@@ -200,8 +240,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         System.gc()
         Runtime.getRuntime().gc()
     }
-    fun loadContent() {
-        if (_loading.value || _endReached.value) return
+    fun loadContent(): Job? {
+        if (_loading.value || _endReached.value) return null
         if (_tagsList.value.isEmpty()) {
             when (_currentSource.value) {
                 SourceType.R34,
@@ -209,84 +249,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 SourceType.REALBOORU,
                 SourceType.REDDIT,
                 SourceType.CHAN,
-                SourceType.EHENTAI -> return
+                SourceType.EHENTAI -> return null;
                 else -> {}
             }
         }
         _errorState.value = null
         _loading.value = true
-        viewModelScope.launch {
+        return viewModelScope.launch {
             try {
-                val rawPostsDownload = when (_currentSource.value) {
-                    SourceType.EHENTAI -> {
-                        val query = _tagsList.value.joinToString(" ")
-                        EHentaiModule.getGalleries(currentPage, query)
-                    }
-                    SourceType.VERCOMICS -> {
-                        val query = _tagsList.value.joinToString(" ")
-                        VerComicsModule.getComics(currentPage, query)
-                    }
-                    SourceType.E621 -> {
-                        val filterTag = if (_currentFilter.value == FileFilter.GAL) "" else _currentFilter.value.tagToInject
-                        val tags = (_tagsList.value + filterTag).filter { it.isNotBlank() }.joinToString(" ") { it.replace(" ", "_") }
-                        val res = NetworkModule.apiE621.getE621Posts(
-                            page = currentPage + 1,
-                            tags = tags,
-                            login = e621User,
-                            apiKey = e621ApiKey
-                        )
-                        res.posts.mapNotNull { dto ->
-                            val url = dto.file?.url ?: return@mapNotNull null
-                            val prev = dto.sample?.url ?: url
-                            val type = when (dto.file.ext?.lowercase()) { "webm", "mp4" -> MediaType.VIDEO; "gif" -> MediaType.GIF; else -> MediaType.IMAGE }
-                            val allTags = (dto.tags?.general ?: emptyList()) + (dto.tags?.character ?: emptyList())
-                            UnifiedPost(dto.id.toString(), url, prev, type, SourceType.E621, (dto.tags?.general ?: emptyList()).take(3).joinToString(" "), allTags)
-                        }
-                    }
-                    SourceType.REALBOORU -> {
-                        val filterTag = if (_currentFilter.value == FileFilter.GAL) "" else _currentFilter.value.tagToInject
-                        val tags = (_tagsList.value + filterTag).filter { it.isNotBlank() }.joinToString(" ")
-                        RealbooruModule.getPosts(currentPage, tags)
-                    }
-                    SourceType.CHAN -> {
-                        val board = _tagsList.value.firstOrNull() ?: "gif"
-                        val threads = FourChanModule.getThreads(currentPage, board)
-                        if (_currentFilter.value == FileFilter.COUNT) {
-                            threads.sortedByDescending { post ->
-                                post.tags.find { it.startsWith("R:") }
-                                    ?.substringAfter("R:")
-                                    ?.toIntOrNull() ?: 0
-                            }
-                        } else {
-                            threads
-                        }
-                    }
-                    SourceType.REDDIT -> {
-                        val tags = _tagsList.value
-                        if (tags.isEmpty()) RedditModule.getPosts(currentPage, "popular")
-                        else {
-                            RedditModule.getPosts(currentPage, tags[0])
-                        }
-                    }
-                    else -> { // R34
-                        val filterTag = if (_currentFilter.value == FileFilter.GAL) "" else _currentFilter.value.tagToInject
-                        val tags = (_tagsList.value + filterTag).filter { it.isNotBlank() }.joinToString(" ") { it.replace(" ", "_") }
-                        val res = NetworkModule.api.getR34Posts(
-                            page = currentPage,
-                            tags = tags.ifBlank { "all" },
-                            apiKey = r34ApiKey,
-                            userId = r34UserId
-                        )
-                        res.map { dto ->
-                            val type = when (dto.file_url.substringAfterLast('.', "").lowercase()) { "mp4", "webm" -> MediaType.VIDEO; "gif" -> MediaType.GIF; else -> MediaType.IMAGE }
-                            UnifiedPost(dto.id.toString(), dto.file_url, dto.preview_url ?: dto.sample_url ?: dto.file_url, type, SourceType.R34, dto.tags.split(" ").take(3).joinToString(" "), dto.tags.split(" ").filter { it.isNotBlank() })
-                        }
-                    }
-                }
-
-                // [CAMBIO 3: FILTRADO BLACKLIST]
-                // Aplicamos el "Martillo de Ban" aquí mismo.
-                // Si el post tiene ALGÚN tag que esté bloqueado, lo borramos de la existencia.
+                val module = SourceManager.getModule(_currentSource.value)
+                val rawPostsDownload = module.getPosts(currentPage, _tagsList.value, _currentFilter.value)
                 val rawPosts = rawPostsDownload.filter { post ->
                     post.tags.none { tag -> BlacklistManager.isBlocked(tag, _currentSource.value) }
                 }
@@ -295,7 +267,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         currentPage++
                         loadContent()
                     } else {
-                        // Fin real
                         _endReached.value = true
                     }
                     _loading.value = false
@@ -363,21 +334,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         resetAndReload()
     }
 
-    // [CAMBIO 4: FUNCIÓN PARA BLOQUEAR TAG DESDE FEED]
     fun blockTag(tag: String, global: Boolean) {
-        // Obtenemos contexto desde Application ya que heredamos de AndroidViewModel
         val context = getApplication<Application>().applicationContext
-
         val source = if (global) null else _currentSource.value
         BlacklistManager.addTag(context, tag, source)
-
-        // Limpiamos el feed actual de la inmundicia recién bloqueada
         val currentPosts = _feed.value
         _feed.value = currentPosts.filter { post ->
             !post.tags.contains(tag)
         }
-
-        // Opcional: Mostrar Toast
         Toast.makeText(context, "Tag '$tag' bloqueado", Toast.LENGTH_SHORT).show()
     }
 
@@ -472,43 +436,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         isGalleryLoadingMore = false
         galleryScrollIndex = 0
         _currentGalleryPages.value = emptyList()
+        _readerPosts.value = null
         _loading.value = true
         galleryJob?.cancel()
 
         val appContext = context.applicationContext
 
         galleryJob = viewModelScope.launch(Dispatchers.IO) {
-            if (post.source == SourceType.EHENTAI) {
-                val (coverUrl, firstChunk, totalPages) = EHentaiModule.getGalleryPageChunk(post.id, 0)
-                totalGalleryWebPages = totalPages
-                withContext(Dispatchers.Main) {
-                    if (firstChunk.isNotEmpty()) {
-                        _currentGalleryPages.value = firstChunk
-                        if (coverUrl.isNotEmpty() && post.previewUrl != coverUrl) updateFeedCover(post.id, coverUrl)
-                        startGalleryPrefetch(appContext, firstChunk, post.source)
-                    }
-                    _loading.value = false
-                }
-            } else if (post.source == SourceType.VERCOMICS) {
-                val images = VerComicsModule.getChapterImages(post.url)
-                withContext(Dispatchers.Main) {
-                    _currentGalleryPages.value = images
-                    _loading.value = false
-                    if (images.isNotEmpty()) {
-                        startGalleryPrefetch(appContext, images, post.source)
-                    }
-                }
-            } else if (post.source == SourceType.REDDIT) {
-                val images = RedditModule.getGalleryImages(post.id)
+            try {
+                val module = SourceManager.getModule(post.source)
+                val images = module.getDetails(post)
+
                 withContext(Dispatchers.Main) {
                     if (images.isNotEmpty()) {
                         _currentGalleryPages.value = images
                         startGalleryPrefetch(appContext, images, post.source)
-                    } else {
-                        _currentGalleryPages.value = listOf(GalleryPageDto(0, post.url, post.url))
+                    }
+                    if (post.source == SourceType.EHENTAI) {
+                        val (coverUrl, firstChunk, totalPages) = EHentaiModule.getGalleryPageChunk(post.id, 0)
+                        totalGalleryWebPages = totalPages
+                        withContext(Dispatchers.Main) {
+                            if (firstChunk.isNotEmpty()) {
+                                _currentGalleryPages.value = firstChunk
+                                if (coverUrl.isNotEmpty() && post.previewUrl != coverUrl) updateFeedCover(post.id, coverUrl)
+                                startGalleryPrefetch(appContext, firstChunk, post.source)
+                            }
+                            _loading.value = false
+                        }
+                    } else if (post.source == SourceType.VERCOMICS) {
+                        val images = VerComicsModule.getChapterImages(post.url)
+                        withContext(Dispatchers.Main) {
+                            _currentGalleryPages.value = images
+                            _loading.value = false
+                            if (images.isNotEmpty()) {
+                                startGalleryPrefetch(appContext, images, post.source)
+                            }
+                        }
+                    } else if (post.source == SourceType.REDDIT) {
+                        val images = RedditModule.getGalleryImages(post.id)
+                        withContext(Dispatchers.Main) {
+                            if (images.isNotEmpty()) {
+                                _currentGalleryPages.value = images
+                                startGalleryPrefetch(appContext, images, post.source)
+                            } else {
+                                _currentGalleryPages.value = listOf(GalleryPageDto(0, post.url, post.url))
+                            }
+                        }
                     }
                     _loading.value = false
                 }
+            } catch (e: Exception) {
             }
         }
     }
@@ -541,16 +518,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun closeGallery() { galleryJob?.cancel(); galleryJob = null; _currentGalleryPages.value = null; currentGalleryUrl = "" }
     fun openGalleryAsReader(pages: List<GalleryPageDto>, startUrl: String) {
-        val convertedPosts = pages.map { page -> UnifiedPost(page.viewerUrl, page.viewerUrl, page.thumbUrl, MediaType.IMAGE, currentGallerySource, "Página ${page.index + 1}") }
+        val convertedPosts = pages.map { page ->
+            UnifiedPost(page.viewerUrl, page.viewerUrl, page.thumbUrl, MediaType.IMAGE, currentGallerySource, "Página ${page.index + 1}",emptyList()) }
         _readerPosts.value = convertedPosts
         val startIndex = pages.indexOfFirst { it.viewerUrl == startUrl }
         _readerIndex.value = if (startIndex >= 0) startIndex else 0
+        _startInGalleryMode.value = false
     }
     suspend fun resolveHdUrl(post: UnifiedPost): String {
-        return when (post.source) {
-            SourceType.REALBOORU -> RealbooruModule.getOriginalUrl(post.id, post.previewUrl)
-            SourceType.EHENTAI -> EHentaiModule.getRealImageUrl(post.id)
-            else -> post.url
+        return try {
+            SourceManager.getModule(post.source).resolveDirectLink(post)
+        } catch (e: Exception) {
+            post.url
         }
     }
     fun openSinglePost(post: UnifiedPost) { _readerPosts.value = listOf(post); _readerIndex.value = 0 }
@@ -584,7 +563,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _tagsList.value = listOf(tag)
         resetAndReload()
     }
-    fun openFeedInReader(index: Int) { _readerPosts.value = _feed.value; _readerIndex.value = index }
+    fun openFeedInReader(index: Int, startGallery: Boolean = false) {
+        _readerPosts.value = _feed.value;
+        _readerIndex.value = index
+        _startInGalleryMode.value = startGallery
+    }
     fun closeReader() { _readerPosts.value = null }
     fun saveGalleryPosition(index: Int, offset: Int) {
         galleryScrollIndex = index;

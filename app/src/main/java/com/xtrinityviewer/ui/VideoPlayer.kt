@@ -52,7 +52,6 @@ import java.util.concurrent.TimeUnit
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.xtrinityviewer.util.VideoCacheManager
 
-// Enum para feedback visual de adelantar/retroceder
 private enum class SeekAction { NONE, FORWARD, REWIND }
 
 @OptIn(UnstableApi::class)
@@ -64,42 +63,37 @@ fun VideoPlayer(
     autoPlay: Boolean = false,
     headers: Map<String, String> = emptyMap(),
     onPlayingChange: (Boolean) -> Unit = {},
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    onControllerVisibilityChanged: (Boolean) -> Unit = {}
 ) {
+
     val context = LocalContext.current
     val activity = context as? Activity
     val scope = rememberCoroutineScope()
     val optimizedUrl = remember(url) { Optimizer.optimize(url) }
-
-    // --- ESTADOS PRINCIPALES ---
     var isLoading by remember { mutableStateOf(true) }
     var isFullscreen by remember { mutableStateOf(false) }
     var isPlayingState by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    // Controla la visibilidad de la interfaz
     var isUiVisible by remember { mutableStateOf(true) }
-    // Estado para mostrar feedback visual de seek (+5s / -5s)
+    LaunchedEffect(isUiVisible) {
+        onControllerVisibilityChanged(isUiVisible)
+    }
     var seekActionState by remember { mutableStateOf(SeekAction.NONE) }
-
-    // TIEMPO
     var currentTime by remember { mutableLongStateOf(0L) }
     var totalTime by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
-
-    // GESTOS (Brillo)
     var gestureProgress by remember { mutableFloatStateOf(0f) }
     var isGestureVisible by remember { mutableStateOf(false) }
     var startBrightness by remember { mutableFloatStateOf(0f) }
     var accumulatedDrag by remember { mutableFloatStateOf(0f) }
 
-    // --- 1. MANTENER PANTALLA ENCENDIDA ---
     DisposableEffect(Unit) {
         val window = activity?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    // --- FULLSCREEN LOGIC ---
     fun toggleFullscreen(enable: Boolean) {
         val act = activity ?: return
         isFullscreen = enable
@@ -115,33 +109,21 @@ fun VideoPlayer(
         }
     }
 
-    // --- EXOPLAYER SETUP ---
     val exoPlayer = remember {
-        // 1. Obtenemos la fábrica de CACHÉ del archivo VideoCacheManager
         val cacheDataSourceFactory = VideoCacheManager.getDataSourceFactory(context)
-
-        // 2. Le decimos a ExoPlayer que use esa fábrica para crear los videos
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory(cacheDataSourceFactory)
-
-        // 3. Construimos el Player inyectándole la fábrica
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
-                // Creamos el Item con la URL optimizada
                 val mediaItem = androidx.media3.common.MediaItem.fromUri(optimizedUrl)
-
-                // Usamos setMediaItem (la fábrica interna se encarga del resto usando la caché)
                 setMediaItem(mediaItem)
-
-                // Configuración estándar
-                repeatMode = Player.REPEAT_MODE_ONE // Bucle infinito
+                repeatMode = Player.REPEAT_MODE_ONE
                 videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT
-                playWhenReady = true // Autoplay activado
+                playWhenReady = true
                 prepare()
 
-                // --- TUS LISTENERS ORIGINALES (Para que la UI funcione igual) ---
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
                         if (state == Player.STATE_READY) {
@@ -154,7 +136,6 @@ fun VideoPlayer(
                             isPlayingState = false
                             isUiVisible = true
                         }
-                        // Sincronizar estado play/pause
                         isPlayingState = isPlaying
                     }
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -171,7 +152,6 @@ fun VideoPlayer(
                 })
             }
     }
-    // --- FUNCIONES HELPER ---
     fun togglePlayPause() {
         if (exoPlayer.isPlaying) {
             exoPlayer.pause()
@@ -183,7 +163,6 @@ fun VideoPlayer(
         }
     }
 
-    // Función para adelantar/retroceder (Ahora con 5 segundos)
     fun seekRelative(seconds: Int) {
         val current = exoPlayer.currentPosition
         val newPos = (current + seconds * 1000).coerceIn(0L, exoPlayer.duration)
@@ -202,7 +181,6 @@ fun VideoPlayer(
         return String.format("%02d:%02d", minutes, seconds)
     }
 
-    // UPDATE TIME LOOP
     LaunchedEffect(exoPlayer) {
         while (true) {
             if (exoPlayer.isPlaying && !isSeeking) {
@@ -223,10 +201,8 @@ fun VideoPlayer(
         onDispose { exoPlayer.release() }
     }
 
-    // --- ESTRUCTURA PRINCIPAL DE CAPAS ---
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
 
-        // === CAPA 1: VIDEO (FONDO PASIVO) ===
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -240,6 +216,7 @@ fun VideoPlayer(
                     isFocusable = false
                     setOnTouchListener { _, _ -> false }
                     player = exoPlayer
+
                 }
             },
             update = { view ->
@@ -250,7 +227,6 @@ fun VideoPlayer(
             modifier = Modifier.fillMaxSize()
         )
 
-        // === CAPA 2: GESTOR CENTRAL DE TOQUES ===
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -261,21 +237,16 @@ fun VideoPlayer(
                         },
                         onDoubleTap = { offset ->
                             val width = size.width
-                            // DIVISIÓN SIMPLE: 50/50
-                            // Si tocas en la mitad izquierda -> Retrocede
-                            // Si tocas en la mitad derecha -> Avanza
                             if (offset.x < width / 2) {
-                                seekRelative(-5) // -5 segundos
+                                seekRelative(-5)
                             } else {
-                                seekRelative(5)  // +5 segundos
+                                seekRelative(5)
                             }
-                        },
-                        onLongPress = { onLongPress() }
+                        }
                     )
                 }
         )
 
-        // === CAPA 2.5: ZONA DE BRILLO (SOLO FULLSCREEN, ZONA IZQUIERDA) ===
         if (isFullscreen) {
             Box(
                 modifier = Modifier
@@ -311,12 +282,8 @@ fun VideoPlayer(
             )
         }
 
-        // === CAPA 3: ELEMENTOS UI (ENCIMA DE TODO) ===
-
-        // 3.1 Loading
         if (isLoading && isVisible) CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = Color(0xFF43A047))
 
-        // 3.2 Botón Play Central (Visible si pausado)
         AnimatedVisibility(
             visible = isUiVisible && !isPlayingState && !isLoading,
             enter = fadeIn(),
@@ -330,7 +297,6 @@ fun VideoPlayer(
             }
         }
 
-        // 3.3 Indicadores Visuales de Seek (+5s / -5s)
         AnimatedVisibility(
             visible = seekActionState != SeekAction.NONE,
             enter = fadeIn(), exit = fadeOut(),
@@ -355,7 +321,6 @@ fun VideoPlayer(
             }
         }
 
-        // 3.4 Error
         if (errorMessage != null) {
             Column(
                 modifier = Modifier.align(Alignment.Center).padding(20.dp).background(Color.Black.copy(0.7f), RoundedCornerShape(8.dp)).padding(16.dp),
@@ -371,7 +336,6 @@ fun VideoPlayer(
             }
         }
 
-        // 3.5 Brillo
         if (isGestureVisible && isFullscreen) {
             Box(
                 modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp).size(100.dp).background(Color.Black.copy(0.7f), RoundedCornerShape(16.dp)),
@@ -384,7 +348,6 @@ fun VideoPlayer(
             }
         }
 
-        // 3.6 Controles Inferiores (Barra de tiempo)
         AnimatedVisibility(
             visible = isUiVisible,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),

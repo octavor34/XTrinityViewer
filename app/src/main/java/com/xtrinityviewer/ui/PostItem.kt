@@ -46,9 +46,17 @@ import coil.ImageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import kotlinx.coroutines.delay
+import androidx.compose.material.icons.filled.Download // o Save
+import androidx.compose.material.icons.filled.Apps
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
@@ -58,6 +66,7 @@ fun PostItem(
     onDetailsClick: () -> Unit,
     onContentClick: () -> Unit,
     onDownloadClick: (UnifiedPost) -> Unit,
+    onGalleryClick: (UnifiedPost) -> Unit,
     onBlockTag: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -72,21 +81,14 @@ fun PostItem(
                 post.source == SourceType.REALBOORU
     }
 
-    // Estado de reproducción manual
     var isPlaying by remember { mutableStateOf(false) }
-
-    // DETECCIÓN CORRECTA DE VIDEO (Incluyendo Reddit GIFs)
     val isVideoFeed = (post.type == MediaType.VIDEO && post.source != SourceType.CHAN) ||
             (post.source == SourceType.REDDIT && post.type == MediaType.GIF)
-
-    // DETECCIÓN CORRECTA DE GIF (Excluyendo los de Reddit que ahora son video)
     val isGifFeed = post.type == MediaType.GIF && post.source != SourceType.REDDIT && post.source != SourceType.CHAN
 
     val autoPlayEnabled = remember(post.source) {
         when(post.source) {
-            // Sitios Manuales
             SourceType.R34, SourceType.E621, SourceType.REALBOORU -> false
-            // Sitios Auto (Reddit, Chan, etc)
             else -> true
         }
     }
@@ -97,24 +99,19 @@ fun PostItem(
     LaunchedEffect(isVideoFeed, isVisible) {
         if (!isVideoFeed && isVisible) showOverlay = true
 
-        // REGLA DE ORO: Si no es visible, MATAMOS la reproducción.
         if (!isVisible) isPlaying = false
 
-        // Si se hace visible y tiene autoplay, activamos.
         if (isVisible && autoPlayEnabled) isPlaying = true
     }
 
-    // --- OPTIMIZACIÓN DE COIL (CACHE GLOBAL) ---
     val imageLoader = LocalContext.current.imageLoader
 
     val requestBuilder = remember(post.url, post.previewUrl, isGifFeed, retryHash) {
 
-        // 1. ELEGIR LA FUENTE DE LA IMAGEN
         val targetUrl = when {
             post.source == SourceType.CHAN && post.type == MediaType.GIF -> post.url
             post.source == SourceType.CHAN -> post.previewUrl
             post.source == SourceType.VERCOMICS -> post.previewUrl
-            // PARA R34, E621 y REALBOORU: Usamos PREVIEW (Sample) en el feed
             post.source == SourceType.R34 -> post.previewUrl
             post.source == SourceType.E621 -> post.previewUrl
             post.source == SourceType.REALBOORU -> post.previewUrl
@@ -140,10 +137,7 @@ fun PostItem(
                     videoFrameMillis(2000)
                 }
             }
-        // NOTA: Borré el .videoFrameMillis(2000) que tenías aquí afuera duplicado
-        // porque eso estaba congelando los GIFs normales.
 
-        // 2. HEADERS
         if (post.source == SourceType.EHENTAI) {
             builder.addHeader("Referer", "https://e-hentai.org/")
             builder.addHeader("Cookie", "nw=1")
@@ -171,7 +165,7 @@ fun PostItem(
                     .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .memoryCachePolicy(CachePolicy.ENABLED)
-                    .allowHardware(false) // Necesario para Canvas
+                    .allowHardware(false)
                     .build()
 
                 val res = ImageLoader(context).execute(req)
@@ -201,13 +195,11 @@ fun PostItem(
                         showOverlay = !showOverlay
                     }
                 } else {
-                    onContentClick()
+                    onContentClick() // Click simple sigue funcionando para entrar al lector
                 }
-            },
-            onLongClick = { onDownloadClick(post) }
+            }
         )
     ) { if (imageLoadError) {
-            // [NUEVO] UI de Error cuando falla la imagen (en vez de negro)
             Column(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -222,7 +214,6 @@ fun PostItem(
                 Button(
                     onClick = {
                         imageLoadError = false
-                        retryHash++ // Esto fuerza a Coil a reintentar
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
@@ -234,7 +225,6 @@ fun PostItem(
             }
         } else {
         if (isSprite) {
-            // MODO SPRITE (Canvas recorte)
             if (spriteBitmap != null) {
                 val bmp = spriteBitmap!!.asImageBitmap()
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -242,13 +232,8 @@ fun PostItem(
                     val tY = post.spriteY ?: 0
                     val tW = post.spriteWidth ?: 100
                     val tH = post.spriteHeight ?: 100
-
-                    // Dibujar recortado y escalado para llenar el item
-                    // Calculamos escala para 'Fit' o 'Crop' según prefieras. Aquí simulamos 'Fit/FillWidth'
                     val scale = size.width / tW
                     val dstHeight = tH * scale
-
-                    // Centrar verticalmente si sobra espacio
                     val yOffset = (size.height - dstHeight) / 2
 
                     drawImage(
@@ -265,14 +250,11 @@ fun PostItem(
             }
         }
         else if (isVideoFeed && isVisible && isPlaying) {
-            // MODO VIDEO PLAYER
             VideoPlayer(
                 url = post.url, isVisible = true, showControls = true, autoPlay = true,
-                headers = emptyMap(), onPlayingChange = { playing -> showOverlay = !playing },
-                onLongPress = { onDownloadClick(post) }
+                headers = emptyMap(), onPlayingChange = { playing -> showOverlay = !playing }
             )
         } else {
-            // MODO IMAGEN NORMAL
             AsyncImage(
                 model = requestBuilder,
                 imageLoader = imageLoader,
@@ -282,29 +264,60 @@ fun PostItem(
                 onError = { imageLoadError = true }
             )
         }
-            // --- OVERLAY (INFO DEL POST) ---
             AnimatedVisibility(visible = showOverlay, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize()) {
-                    var badgeText = "IMG"
-                    var badgeColor = Color(0xFF4CAF50)
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 60.dp, end = 80.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        var badgeText = "IMG"
+                        var badgeColor = Color(0xFF4CAF50)
 
-                    when (post.type) {
-                        MediaType.GALLERY -> { badgeText = "GAL"; badgeColor = Color(0xFFE91E63) }
-                        MediaType.VIDEO -> {
-                            if (post.source == SourceType.REDDIT) { badgeText = "GIF"; badgeColor = Color(0xFF9C27B0) }
-                            else { badgeText = "VID"; badgeColor = Color(0xFFE91E63) }
+                        when (post.type) {
+                            MediaType.GALLERY -> { badgeText = "GAL"; badgeColor = Color(0xFFE91E63) }
+                            MediaType.VIDEO -> {
+                                if (post.source == SourceType.REDDIT) { badgeText = "GIF"; badgeColor = Color(0xFF9C27B0) }
+                                else { badgeText = "VID"; badgeColor = Color(0xFFE91E63) }
+                            }
+                            MediaType.GIF -> { badgeText = "GIF"; badgeColor = Color(0xFF9C27B0) }
+                            MediaType.IMAGE -> {
+                                val cleanUrl = post.url.substringBefore('?')
+                                val ext = cleanUrl.substringAfterLast('.', "").uppercase()
+                                badgeText = if (ext.length in 3..4) ext else "IMG"
+                                badgeColor = Color(0xFF4CAF50)
+                            }
                         }
-                        MediaType.GIF -> { badgeText = "GIF"; badgeColor = Color(0xFF9C27B0) }
-                        MediaType.IMAGE -> {
-                            val cleanUrl = post.url.substringBefore('?')
-                            val ext = cleanUrl.substringAfterLast('.', "").uppercase()
-                            badgeText = if (ext.length in 3..4) ext else "IMG"
-                            badgeColor = Color(0xFF4CAF50)
-                        }
-                    }
 
-                    Box(modifier = Modifier.align(Alignment.TopEnd).padding(top = 100.dp, end = 16.dp).background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.small).padding(6.dp)) {
-                        Text(badgeText, color = badgeColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Box(modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.6f), shape = MaterialTheme.shapes.small)
+                            .padding(6.dp)) {
+                            Text(badgeText, color = badgeColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        if (post.source != SourceType.CHAN) {
+                            IconButton(
+                                onClick = { onGalleryClick(post) },
+                                modifier = Modifier
+                                    .background(Color.Black.copy(0.6f), androidx.compose.foundation.shape.CircleShape)
+                                    .size(40.dp)
+                            ) {
+                                Icon(Icons.Default.Apps, "Galería", tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+
+                        IconButton(
+                            onClick = { onDownloadClick(post) },
+                            modifier = Modifier
+                                .background(Color.Black.copy(0.6f), androidx.compose.foundation.shape.CircleShape)
+                                .size(40.dp)
+                        ) {
+                            Icon(Icons.Default.Download, "Descargar", tint = Color.White)
+                        }
                     }
 
                     Box(
@@ -328,7 +341,6 @@ fun PostItem(
                                 Badge(text = sourceName, color = sourceColor)
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                // Lógica de visualización condicional
                                 if (isBooruSource) {
                                     Badge(text = "Lista de Tags", color = Color.Gray)
                                 } else {
@@ -339,11 +351,9 @@ fun PostItem(
                                             Badge(text = "$count Posts", color = Color(0xFFFFD600))
                                         }
                                     }
-                                    // No ponemos nada más aquí en la fila del título, dejamos el texto abajo
                                 }
                             }
 
-                            // Título/Descripción siempre visible abajo
                             if (!isBooruSource && post.title.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(

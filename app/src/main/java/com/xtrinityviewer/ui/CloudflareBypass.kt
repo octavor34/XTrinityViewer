@@ -36,37 +36,24 @@ import kotlinx.coroutines.launch
 fun CloudflareBypass(onBypassSuccess: () -> Unit, onCancel: () -> Unit) {
     var webView: WebView? by remember { mutableStateOf(null) }
     val scope = rememberCoroutineScope()
-    // Evitamos disparar el éxito múltiples veces
     var successTriggered by remember { mutableStateOf(false) }
 
-    // --- LÓGICA INTELIGENTE DE DETECCIÓN (Tu código mejorado) ---
     fun checkSuccess(url: String?, title: String) {
         if (successTriggered) return
+
         if (url == null || !url.contains("vercomicsporno")) return
 
         val cookies = CookieManager.getInstance().getCookie(url) ?: ""
-
-        // 1. ¿Tenemos la cookie mágica?
         val hasClearance = cookies.contains("cf_clearance")
-
-        // 2. ¿Seguimos en la sala de espera? (Títulos típicos de Cloudflare)
         val isChallenge = title.contains("Just a moment", true) ||
                 title.contains("One more step", true) ||
                 title.contains("Attention Required", true) ||
                 title.contains("Cloudflare", true)
 
-        // CONDICIÓN DE ÉXITO:
-        // Tenemos cookie Y el título NO parece ser el del captcha.
         if (hasClearance && !isChallenge) {
             Log.d("CloudflareBypass", "¡Bypass Exitoso! Cookies: $cookies")
-
-            // Guardamos las cookies en el módulo inmediatamente
             VerComicsModule.saveCookiesFromWebView(url, cookies)
-
             successTriggered = true
-
-            // Damos un pequeño respiro de 1.5s para que el usuario vea que entró a la home
-            // y luego cerramos la ventana automáticamente.
             scope.launch {
                 delay(1500)
                 onBypassSuccess()
@@ -77,14 +64,11 @@ fun CloudflareBypass(onBypassSuccess: () -> Unit, onCancel: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-
-        // CAPA 1: WEBVIEW (FONDO)
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
                     webView = this
 
-                    // IMPORTANTE: UserAgent idéntico al del módulo de datos
                     settings.userAgentString = VerComicsModule.USER_AGENT
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
@@ -93,14 +77,12 @@ fun CloudflareBypass(onBypassSuccess: () -> Unit, onCancel: () -> Unit) {
                     settings.loadWithOverviewMode = true
                     settings.cacheMode = WebSettings.LOAD_DEFAULT
 
-                    // Cookies de terceros habilitadas para CF
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             val title = view?.title ?: ""
-                            // Cada vez que carga algo, chequeamos si ya pasamos el reto
                             checkSuccess(url, title)
                         }
                     }
@@ -111,14 +93,11 @@ fun CloudflareBypass(onBypassSuccess: () -> Unit, onCancel: () -> Unit) {
             modifier = Modifier.fillMaxSize()
         )
 
-        // CAPA 2: BOTONES FLOTANTES (CON Z-INDEX PARA QUE FUNCIONEN)
-
-        // Botón CERRAR (Cancelar manualmente si te cansas de esperar)
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(24.dp)
-                .zIndex(100f) // <--- ESTO ASEGURA QUE EL TOQUE LO RECIBA EL BOTÓN
+                .zIndex(100f)
         ) {
             IconButton(
                 onClick = { onCancel() },
@@ -134,7 +113,6 @@ fun CloudflareBypass(onBypassSuccess: () -> Unit, onCancel: () -> Unit) {
             }
         }
 
-        // Botón REFRESCAR (Si se traba el captcha)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -146,7 +124,7 @@ fun CloudflareBypass(onBypassSuccess: () -> Unit, onCancel: () -> Unit) {
                     CookieManager.getInstance().removeAllCookies(null)
                     CookieManager.getInstance().flush()
                     webView?.reload()
-                    successTriggered = false // Reseteamos lógica por si acaso
+                    successTriggered = false
                 },
                 containerColor = Color(0xFFC0CA33),
                 contentColor = Color.Black

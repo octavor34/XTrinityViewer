@@ -78,7 +78,6 @@ fun WelcomeScreen(onStartClick: () -> Unit) {
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Sección Novedades
             Text(
                 "NOVEDADES V2.0",
                 fontSize = 14.sp,

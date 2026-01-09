@@ -69,7 +69,6 @@ fun GalleryReader(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        // BUG 6 CORREGIDO: Aumentado padding top a 60.dp
         Row(
             modifier = Modifier.fillMaxWidth().background(Color(0xFF111111)).padding(top = 60.dp, bottom = 10.dp, start = 10.dp),
             verticalAlignment = Alignment.CenterVertically

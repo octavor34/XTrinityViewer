@@ -86,7 +86,6 @@ object NetworkModule {
     private const val E621_BASE = "https://e621.net/"
     private const val CHAN_BASE = "https://a.4cdn.org/"
     private const val REDDIT_BASE = "https://www.reddit.com/"
-
     private val gson = GsonBuilder().setLenient().create()
 
     val client = OkHttpClient.Builder()

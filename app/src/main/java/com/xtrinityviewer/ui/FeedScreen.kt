@@ -78,7 +78,7 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
     val scope = rememberCoroutineScope()
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { /* No hace falta acción, solo que el usuario acepte */ }
+        onResult = {}
     )
     LaunchedEffect(Unit) {
         if (android.os.Build.VERSION.SDK_INT >= 33) {
@@ -112,7 +112,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
         else -> r34Color
     }
 
-
     LaunchedEffect(currentSource) {
         context.imageLoader.memoryCache?.clear()
     }
@@ -143,17 +142,14 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
     val saveFileLauncher = rememberLauncherForActivityResult(
         contract = com.xtrinityviewer.util.CreateSmartDocument()
     ) { uri ->
-        // Verificamos que tengamos URI y que tengamos el Post guardado en memoria
         if (uri != null && pendingPost != null) {
-            val postToDownload = pendingPost!! // Copia local segura
+            val postToDownload = pendingPost!!
             Toast.makeText(context, "Iniciando descarga...", Toast.LENGTH_SHORT).show()
 
             scope.launch {
-                // Pasamos el post completo para que el Downloader sepa qué cookies usar
                 com.xtrinityviewer.util.Downloader.downloadToUri(context, postToDownload, uri)
             }
         } else {
-            // Solo mostramos error si el URI es null (Usuario canceló)
             if (uri == null) {
                 Toast.makeText(context, "Selección cancelada", Toast.LENGTH_SHORT).show()
             } else {
@@ -167,11 +163,9 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                // Si desliza hacia abajo (available.y < 0) -> Ocultar UI
                 if (available.y < -5f && uiVisible) {
                     uiVisible = false
                 }
-                // Si desliza hacia arriba (available.y > 0) -> Mostrar UI
                 else if (available.y > 5f && !uiVisible) {
                     uiVisible = true
                 }
@@ -181,7 +175,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
     }
     var showBlockDialog by remember { mutableStateOf(false) }
     var tagToBlock by remember { mutableStateOf("") }
-
 
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
 
@@ -205,8 +198,8 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                             onRequestSetup()
                         },
                         modifier = Modifier
-                            .align(Alignment.TopEnd) // Parte superior derecha
-                            .padding(8.dp)           // Un poco de margen
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -235,7 +228,7 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                 shape = CircleShape,
                                 color = themeColor.copy(alpha = 0.2f),
                                 modifier = Modifier
-                                    .size(60.dp) // Lo hice un poquito más grande para que luzca la imagen
+                                    .size(60.dp)
                                     .border(2.dp, themeColor, CircleShape)
                             ) {
                                 Image(
@@ -268,7 +261,7 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                 )
                 LazyColumn(
                     modifier = Modifier
-                        .weight(1f) // Ocupa el espacio sobrante, empujando el footer abajo pero sin ocultarlo
+                        .weight(1f)
                         .fillMaxWidth()
                 ) {
                     items(items) { (label, icon, source) ->
@@ -338,10 +331,8 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                     )
                     Spacer(Modifier.height(16.dp))
 
-                    // BOTÓN DONAR
                     Button(
                         onClick = {
-                            // Pon aquí tu link real
                             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.buymeacoffee.com/octaviopdm7"))
                             context.startActivity(intent)
                         },
@@ -389,7 +380,7 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                     beyondBoundsPageCount = 3,
                     key = { index ->
                         if (index < feed.size) feed[index].id
-                        else "end_of_feed_marker" // ID único para la pantalla final
+                        else "end_of_feed_marker"
                     }
                 ) { page ->
                     if (page in feed.indices) {
@@ -398,6 +389,9 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                 post = feed[page],
                                 isVisible = (pagerState.currentPage == page),
                                 onDetailsClick = { selectedPostInfo = feed[page]; showTagSheet = true },
+                                onGalleryClick = {
+                                    viewModel.openFeedInReader(page, startGallery = true)
+                                },
                                 onContentClick = {
                                     when(feed[page].source) {
                                         SourceType.EHENTAI -> viewModel.openGallery(context, feed[page])
@@ -417,7 +411,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                             )
                         }
                     } else {
-                        // --- PANTALLA FINAL "FIN DE RESULTADOS" ---
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -487,9 +480,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                 Column(modifier = Modifier.align(Alignment.Center).padding(horizontal = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
 
                     if (currentSource == SourceType.REDDIT) {
-                        // BUG 1 CORREGIDO:
-                        // Solo mostramos sugerencias si NO has buscado nada todavía.
-                        // Si ya buscaste algo (addedTags tiene cosas) y estamos aquí, significa que no hubo resultados -> Mensaje de error.
                         if (addedTags.isEmpty()) {
                             Text("😈", fontSize = 80.sp)
                             Text("Sugerencias", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.padding(vertical = 10.dp))
@@ -501,7 +491,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                 }
                             }
                         } else {
-                            // Si buscaste algo (ej: GIFs) y no hay nada:
                             Icon(Icons.Default.SearchOff, null, tint = Color.Gray, modifier = Modifier.size(60.dp))
                             Spacer(Modifier.height(16.dp))
                             Text("No hay nada aquí", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -532,26 +521,18 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                         }
                     }
                     else {
-                        // CORRECCIÓN 1: Agrupar E-HENTAI con el resto para mostrar "Busca un tag"
                         if (addedTags.isEmpty() && currentSource != SourceType.VERCOMICS) {
                             Icon(Icons.Default.Search, null, tint = themeColor, modifier = Modifier.size(80.dp).background(themeColor.copy(0.1f), CircleShape).padding(16.dp))
                             Spacer(Modifier.height(16.dp))
                             Text("Busca un tag para empezar", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         } else {
-                            // VERCOMICS o FALLBACK
                             if (currentSource == SourceType.VERCOMICS && addedTags.isEmpty()) {
                                 Text("Busca algo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                             }
-                            // --- SISTEMA DE MENSAJES JSON ---
-
-                            // Obtenemos el mensaje una sola vez (remember) para que no cambie al hacer scroll
                             val randomMsg = remember(feed) {
                                 com.xtrinityviewer.data.MessageManager.getRandomMessage(context)
                             }
-
-                            // Renderizamos el Icono
                             if (randomMsg.iconRes != null) {
-                                // Es un icono personalizado (PNG/XML en drawable)
                                 Image(
                                     painter = painterResource(id = randomMsg.iconRes),
                                     contentDescription = null,
@@ -559,7 +540,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                     modifier = Modifier.size(80.dp)
                                 )
                             } else if (randomMsg.vectorIcon != null) {
-                                // Es un icono nativo de Android
                                 Icon(
                                     imageVector = randomMsg.vectorIcon,
                                     contentDescription = null,
@@ -570,7 +550,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
 
                             Spacer(Modifier.height(16.dp))
 
-                            // Título Principal
                             Text(
                                 text = randomMsg.title,
                                 color = Color.White,
@@ -581,8 +560,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                             )
 
                             Spacer(Modifier.height(8.dp))
-
-                            // Subtítulo
                             Text(
                                 text = randomMsg.subtitle,
                                 color = Color.Gray,
@@ -672,7 +649,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                // 1. TAGS CON MENÚ
                                 items(addedTags) { tag ->
                                     Surface(
                                         color = themeColor.copy(alpha = 0.2f),
@@ -692,8 +668,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                         }
                                     }
                                 }
-
-                                // 2. CAMPO DE TEXTO
                                 item {
                                     val placeholder = if (currentSource == SourceType.CHAN) "Tablón..." else "Tags..."
                                     Box(modifier = Modifier.widthIn(min = 100.dp).height(40.dp), contentAlignment = Alignment.CenterStart) {
@@ -820,10 +794,8 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                     if (!showInteractiveTagsList) {
                         Text(post.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     } else {
-                        // Si ES booru, mostramos cabecera "Detalles"
                         Text("Tags:", color = Color.Gray, fontSize = 14.sp)
                     }
-                    // 2. LISTA DE TAGS (Solo visible si es R34, E621 o Realbooru)
                     if (showInteractiveTagsList) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Text("Etiquetas:", color = Color.Gray, fontSize = 12.sp)
@@ -836,7 +808,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                 var isMenuExpanded by remember { mutableStateOf(false) }
 
                                 Box(modifier = Modifier.fillMaxWidth()) {
-                                    // EL BOTÓN DEL TAG CON MENÚ DE 3 PUNTOS
                                     Button(
                                         onClick = { isMenuExpanded = true },
                                         colors = ButtonDefaults.buttonColors(
@@ -867,7 +838,6 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                         }
                                     }
 
-                                    // EL MENÚ DESPLEGABLE
                                     DropdownMenu(
                                         expanded = isMenuExpanded,
                                         onDismissRequest = { isMenuExpanded = false },

@@ -26,6 +26,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.*
 import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.decode.GifDecoder
@@ -58,39 +60,37 @@ import com.xtrinityviewer.data.UnifiedPost
 import com.xtrinityviewer.data.VerComicsModule
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FullScreenReader(
     posts: List<UnifiedPost>,
     initialIndex: Int,
+    initialGalleryMode: Boolean = false,
     onBack: () -> Unit,
     onLoadHd: suspend (UnifiedPost) -> String,
-    onDownload: (String) -> Unit
+    onDownload: (String) -> Unit,
+    onLoadMore: () -> Unit,
+    onOpenGallery: (UnifiedPost) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // ESTADOS
-    var isGalleryMode by remember { mutableStateOf(false) }
+    var isGalleryMode by remember(initialGalleryMode) { mutableStateOf(initialGalleryMode) }
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { posts.size })
     var isZoomActive by remember { mutableStateOf(false) }
     var showOverlay by remember { mutableStateOf(true) }
-
-    // --- LÓGICA DE BLOQUEO DE SCROLL ---
     val currentPost = posts.getOrNull(pagerState.currentPage)
-
-    // Lista Negra: Solo bloqueamos el scroll en estos sitios (Boorus de imagen única)
     val isStaticBoard = remember(currentPost) {
         val src = currentPost?.source
         src == SourceType.R34 ||
                 src == SourceType.E621 ||
                 src == SourceType.REALBOORU
     }
-    // Permitimos swipe si NO es un board estático
     val allowSwipe = !isStaticBoard
-
-    // MANTENER PANTALLA ENCENDIDA
     DisposableEffect(Unit) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -99,7 +99,6 @@ fun FullScreenReader(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (isGalleryMode) {
-            // --- MODO GRID (SOLO VISIBLE DESDE 4CHAN) ---
             Column(Modifier.fillMaxSize()) {
                 Box(
                     Modifier
@@ -112,16 +111,21 @@ fun FullScreenReader(
                         Icon(Icons.Default.ArrowBack, "Atrás", tint = Color.White)
                     }
                     Text("${posts.size} Archivos", color = Color.White, modifier = Modifier.align(Alignment.Center))
-                    IconButton(onClick = { isGalleryMode = false }, modifier = Modifier.align(Alignment.CenterEnd)) {
+                    IconButton(onClick = { isGalleryMode = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
                         Icon(Icons.Default.ViewCarousel, "Modo Lector", tint = Color.White)
                     }
                 }
-
                 LazyVerticalGrid(columns = GridCells.Adaptive(100.dp), modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(posts) { index, post ->
                         Box(Modifier.aspectRatio(1f).padding(2.dp).clickable {
-                            scope.launch { pagerState.scrollToPage(index) }
-                            isGalleryMode = false
+                            if (post.source == SourceType.EHENTAI ||
+                                post.source == SourceType.VERCOMICS ||
+                                (post.source == SourceType.REDDIT && post.type == MediaType.GALLERY)) {
+                                onOpenGallery(post)
+                            } else {
+                                scope.launch { pagerState.scrollToPage(index) }
+                                isGalleryMode = false
+                            }
                         }) {
                             AsyncImage(
                                 model = post.previewUrl,
@@ -129,25 +133,63 @@ fun FullScreenReader(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
-                            val badge = when(post.type) {
-                                MediaType.VIDEO -> "VID"
-                                MediaType.GIF -> "GIF"
-                                else -> "IMG"
+                            var badgeText = "IMG"
+                            var badgeColor = Color(0xFF4CAF50) // Verde por defecto
+
+                            when (post.type) {
+                                MediaType.GALLERY -> {
+                                    badgeText = "GAL"
+                                    badgeColor = Color(0xFFE91E63) // Rosa fuerte
+                                }
+                                MediaType.VIDEO -> {
+                                    if (post.source == SourceType.REDDIT) {
+                                        badgeText = "GIF"
+                                        badgeColor = Color(0xFF9C27B0) // Morado
+                                    } else {
+                                        badgeText = "VID"
+                                        badgeColor = Color(0xFFE91E63)
+                                    }
+                                }
+                                MediaType.GIF -> {
+                                    badgeText = "GIF"
+                                    badgeColor = Color(0xFF9C27B0)
+                                }
+                                MediaType.IMAGE -> {
+                                    val cleanUrl = post.url.substringBefore('?')
+                                    val ext = cleanUrl.substringAfterLast('.', "").uppercase()
+                                    badgeText = if (ext == "PNG") "PNG" else "IMG"
+                                    badgeColor = Color(0xFF4CAF50)
+                                }
                             }
-                            val badgeColor = when(post.type) {
-                                MediaType.VIDEO -> Color(0xFFE91E63)
-                                MediaType.GIF -> Color(0xFF9C27B0)
-                                else -> Color(0xFF4CAF50)
-                            }
-                            Box(Modifier.align(Alignment.TopEnd).padding(4.dp).background(badgeColor.copy(0.8f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).padding(horizontal = 4.dp)) {
-                                Text(badge, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+
+                            Box(Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .background(badgeColor.copy(0.8f), androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                .padding(horizontal = 4.dp)
+                            ) {
+                                Text(badgeText, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
+
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                Button(
+                                    onClick = onLoadMore,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Refresh, null, tint = Color.White)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("CARGAR SIGUIENTE LOTE", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
                 }
             }
         } else {
-            // --- MODO LECTOR (PAGER) ---
             VerticalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
@@ -207,8 +249,10 @@ fun FullScreenReader(
                                 showControls = false,
                                 autoPlay = false,
                                 headers = requestHeaders,
-                                onPlayingChange = { isPlaying -> if (isPageVisible) showOverlay = !isPlaying },
-                                onLongPress = { onDownload(realUrl) }
+                                onPlayingChange = { isPlaying -> },
+                                onControllerVisibilityChanged = { visible ->
+                                    if (isPageVisible) showOverlay = visible
+                                }
                             )
                         } else {
                             LaunchedEffect(isPageVisible) {
@@ -219,7 +263,7 @@ fun FullScreenReader(
                                 source = post.source,
                                 onZoomChange = { zoomed -> if (isPageVisible) isZoomActive = zoomed },
                                 onToggleUI = { showOverlay = !showOverlay },
-                                onLongPress = { onDownload(realUrl) }
+                                onLongPress = {}
                             )
                         }
                     } else {
@@ -244,16 +288,31 @@ fun FullScreenReader(
                     ) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Atrás", tint = Color.White)
                     }
-
-                    if (posts.isNotEmpty() && posts[0].source == SourceType.CHAN) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 40.dp, end = 10.dp)
+                    ) {
+                        if (posts.isNotEmpty() && posts[0].source == SourceType.CHAN) {
+                            IconButton(
+                                onClick = { isGalleryMode = true },
+                                modifier = Modifier
+                                    .background(Color.Black.copy(0.3f), androidx.compose.foundation.shape.CircleShape)
+                            ) {
+                                Icon(Icons.Default.Apps, contentDescription = "Galería", tint = Color.White)
+                            }
+                        }
                         IconButton(
-                            onClick = { isGalleryMode = true },
+                            onClick = {
+                                val urlToDownload = posts.getOrNull(pagerState.currentPage)?.let { post ->
+                                    post.url
+                                }
+                                if (urlToDownload != null) onDownload(urlToDownload)
+                            },
                             modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 40.dp, end = 10.dp)
                                 .background(Color.Black.copy(0.3f), androidx.compose.foundation.shape.CircleShape)
                         ) {
-                            Icon(Icons.Default.Apps, contentDescription = "Galería", tint = Color.White)
+                            Icon(Icons.Default.Download, contentDescription = "Descargar", tint = Color.White)
                         }
                     }
 
@@ -322,13 +381,10 @@ fun ZoomableImageContainer(
             .clipToBounds()
             .pointerInput(Unit) {
                 detectTransformGesturesAndTap(
-                    // [SOLUCIÓN CLAVE]
-                    // Le decimos al detector: ¿Estoy haciendo Pan? Solo si la escala es > 1.01
-                    // Si la escala es 1.0, esta variable es falsa y el detector ignorará el arrastre simple.
                     shouldConsumePan = { scale > 1.01f },
                     onTap = onToggleUI,
                     onGesture = { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                        val newScale = (scale * zoom).coerceIn(1f, 50f)
                         scale = newScale
                         val extraWidth = (newScale - 1) * size.width
                         val extraHeight = (newScale - 1) * size.height
@@ -374,8 +430,6 @@ fun ZoomableImageContainer(
         }
     }
 }
-
-// --- COMPONENTES AUXILIARES ---
 
 @Composable
 fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
@@ -435,8 +489,6 @@ fun ReaderBadge(text: String, color: Color) {
     Text(text = text, color = textColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.background(color, MaterialTheme.shapes.small).padding(horizontal = 6.dp, vertical = 2.dp))
 }
 
-// --- GESTOR DE GESTOS CORREGIDO ---
-// Ahora acepta 'shouldConsumePan' para decidir si robar o no el evento
 suspend fun PointerInputScope.detectTransformGesturesAndTap(
     shouldConsumePan: () -> Boolean,
     onTap: () -> Unit,
@@ -457,8 +509,6 @@ suspend fun PointerInputScope.detectTransformGesturesAndTap(
                 val zoomChange = event.calculateZoom()
                 val rotationChange = event.calculateRotation()
                 val panChange = event.calculatePan()
-
-                // Detectamos si es multitouch (pellizcar)
                 val isMultiTouch = event.changes.size > 1
 
                 if (!pastTouchSlop) {
@@ -478,14 +528,6 @@ suspend fun PointerInputScope.detectTransformGesturesAndTap(
                         onGesture(centroid, panChange, zoomChange, rotationChange)
                     }
 
-                    // --- AQUÍ ESTÁ EL TRUCO ---
-                    // Solo consumimos el evento si:
-                    // 1. Es multitouch (pinch/zoom)
-                    // 2. O estamos haciendo zoom/rotación activa
-                    // 3. O 'shouldConsumePan' es true (La imagen ya tiene zoom)
-                    //
-                    // Si es un dedo, no hay zoom, y shouldConsumePan es falso -> NO CONSUMIMOS
-                    // El VerticalPager recibirá el evento y hará scroll.
                     val isZoomingOrRotating = zoomChange != 1f || rotationChange != 0f
 
                     if (isMultiTouch || isZoomingOrRotating || shouldConsumePan()) {

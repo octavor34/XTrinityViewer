@@ -89,7 +89,6 @@ fun CrashScreen(errorMsg: String, onRestart: () -> Unit) {
 
         Spacer(Modifier.height(24.dp))
 
-        // CAJA DEL ERROR (Estilo Terminal)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -101,7 +100,7 @@ fun CrashScreen(errorMsg: String, onRestart: () -> Unit) {
         ) {
             Text(
                 text = errorMsg,
-                color = Color(0xFFFF5555), // Texto rojo claro terminal
+                color = Color(0xFFFF5555),
                 fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace
             )
@@ -110,7 +109,6 @@ fun CrashScreen(errorMsg: String, onRestart: () -> Unit) {
         Spacer(Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            // Botón Copiar
             Button(
                 onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -125,7 +123,6 @@ fun CrashScreen(errorMsg: String, onRestart: () -> Unit) {
                 Text("COPIAR")
             }
 
-            // Botón Reiniciar
             Button(
                 onClick = onRestart,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Red)

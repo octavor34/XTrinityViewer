@@ -28,12 +28,10 @@ import kotlinx.coroutines.delay
 import java.io.File
 import java.text.DecimalFormat
 
-// Variable GLOBAL para controlar la visibilidad desde cualquier parte
 var isDebugVisible = mutableStateOf(false)
 
 @Composable
 fun DebugMonitor() {
-    // Si está invisible, no dibujamos nada (ni espacio vacío)
     if (!isDebugVisible.value) return
 
     var ramUsage by remember { mutableStateOf("0 MB") }
@@ -62,13 +60,12 @@ fun DebugMonitor() {
         }
     }
 
-    // POSICIÓN EXACTA: Arriba del logo
     Box(
         modifier = Modifier
-            .padding(top = 20.dp, start = 20.dp) // Ajustado para estar sobre el logo
+            .padding(top = 20.dp, start = 20.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(Color.Black.copy(alpha = 0.8f))
-            .clickable { isDebugVisible.value = false } // Tocar para OCULTAR TOTALMENTE
+            .clickable { isDebugVisible.value = false }
             .padding(8.dp)
     ) {
         Column {

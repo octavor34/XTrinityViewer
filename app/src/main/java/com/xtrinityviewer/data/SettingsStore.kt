@@ -8,19 +8,16 @@ import java.io.File
 import org.json.JSONObject
 
 object SettingsStore {
-    // Nombre del archivo antiguo (Texto plano)
     private const val OLD_PREFS_NAME = "trinity_settings"
-    // Nombre del archivo nuevo (Encriptado)
+
     private const val SECURE_PREFS_NAME = "trinity_secure_settings"
 
     private const val NO_BACKUP_FILE = "local_credentials.json"
 
-    // Obtiene las preferencias seguras (crea la llave maestra si no existe)
     private fun getSecurePrefs(context: Context): SharedPreferences {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-
         return EncryptedSharedPreferences.create(
             context,
             SECURE_PREFS_NAME,
@@ -30,19 +27,12 @@ object SettingsStore {
         )
     }
 
-    // --- LÓGICA DE MIGRACIÓN (IMPORTANTE) ---
-    // Verifica si existen datos viejos sin encriptar y los mueve al baúl seguro
     private fun migrateIfNeeded(context: Context) {
         val oldPrefs = context.getSharedPreferences(OLD_PREFS_NAME, Context.MODE_PRIVATE)
-
-        // Si el archivo viejo tiene datos...
         if (oldPrefs.all.isNotEmpty()) {
             val securePrefs = getSecurePrefs(context)
-
-            // Si el archivo seguro está vacío, migramos
             if (securePrefs.all.isEmpty()) {
                 val editor = securePrefs.edit()
-                // Copiamos todo: keys, booleanos, etc.
                 oldPrefs.all.forEach { (key, value) ->
                     when (value) {
                         is String -> editor.putString(key, value)
@@ -54,15 +44,12 @@ object SettingsStore {
                 }
                 editor.apply()
             }
-            // Borramos los datos inseguros viejos para siempre
             oldPrefs.edit().clear().apply()
         }
     }
 
-    // --- FUNCIONES PÚBLICAS (API) ---
-
     fun isBackupEnabled(context: Context): Boolean {
-        migrateIfNeeded(context) // Chequeo de migración al iniciar
+        migrateIfNeeded(context)
         return getSecurePrefs(context).getBoolean("backup_enabled", true)
     }
 
@@ -71,7 +58,6 @@ object SettingsStore {
         val prefs = getSecurePrefs(context)
 
         if (enabled) {
-            // Guardar en Prefs Encriptadas
             prefs.edit().apply {
                 putString("r34_user", currentCreds["r34_user"])
                 putString("r34_key", currentCreds["r34_key"])
@@ -80,11 +66,9 @@ object SettingsStore {
                 putBoolean("backup_enabled", true)
                 apply()
             }
-            // Borrar archivo JSON local si existía
             val file = File(context.filesDir, NO_BACKUP_FILE)
             if (file.exists()) file.delete()
         } else {
-            // MODO LOCAL (JSON): Borrar de Prefs, guardar en JSON
             val json = JSONObject().apply {
                 put("r34_user", currentCreds["r34_user"])
                 put("r34_key", currentCreds["r34_key"])
@@ -128,8 +112,6 @@ object SettingsStore {
 
     fun getCredentials(context: Context): Map<String, String> {
         migrateIfNeeded(context)
-
-        // Prioridad 1: JSON Local
         val file = File(context.filesDir, NO_BACKUP_FILE)
         if (file.exists()) {
             try {
@@ -143,10 +125,7 @@ object SettingsStore {
             } catch (e: Exception) { }
         }
 
-        // Prioridad 2: Preferencias Encriptadas
         val prefs = getSecurePrefs(context)
-
-        // [CORRECCIÓN] Extraemos variables primero para evitar errores de inferencia en mapOf
         val r34u = prefs.getString("r34_user", null) ?: ""
         val r34k = prefs.getString("r34_key", null) ?: ""
         val e621u = prefs.getString("e621_user", null) ?: ""
@@ -167,7 +146,6 @@ object SettingsStore {
         getSecurePrefs(context).edit().putBoolean("welcome_seen_v1", true).apply()
     }
 
-    // Helpers rápidos
     fun hasR34Credentials(context: Context): Boolean {
         val creds = getCredentials(context)
         return !creds["r34_user"].isNullOrEmpty() && !creds["r34_key"].isNullOrEmpty()

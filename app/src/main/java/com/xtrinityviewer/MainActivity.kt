@@ -55,7 +55,6 @@ class MainActivity : ComponentActivity() {
         windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
 
-        // Configuración de Coil (Cargador de imágenes)
         val imageLoader = ImageLoader.Builder(this)
             .components {
                 if (android.os.Build.VERSION.SDK_INT >= 28) add(ImageDecoderDecoder.Factory()) else add(GifDecoder.Factory())
@@ -70,17 +69,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             val viewModel: MainViewModel = viewModel()
             val readerPosts by viewModel.readerPosts.collectAsState()
-            val readerIndex by viewModel.readerIndex.collectAsState() // Necesario para FullScreenReader
+            val readerIndex by viewModel.readerIndex.collectAsState()
+            val startInGallery by viewModel.startInGalleryMode.collectAsState()
             val galleryPages by viewModel.currentGalleryPages.collectAsState()
             val currentSource by viewModel.currentSource.collectAsState()
             val verComicsReady by viewModel.verComicsReady.collectAsState()
             val context = LocalContext.current
 
-            // ESTADOS DE NAVEGACIÓN Y CONFIGURACIÓN
             var isWelcomeSeen by remember { mutableStateOf(SettingsStore.isWelcomeSeen(context)) }
             var showSetupOverlay by remember { mutableStateOf(false) }
 
-            // ESTADO PARA DESCARGAS
             var pendingDownloadUrl by remember { mutableStateOf("") }
             val saveFileLauncher = rememberLauncherForActivityResult(
                 contract = ActivityResultContracts.CreateDocument("image/jpeg")
@@ -90,38 +88,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Recargar credenciales al iniciar si ya están guardadas
             LaunchedEffect(Unit) {
                 viewModel.reloadCredentials(context)
             }
             val showBypassWebView by viewModel.showBypassWebView.collectAsState()
             Box(modifier = Modifier.fillMaxSize()) {
-
-                // --- CAPA 1: FLUJO PRINCIPAL DE PANTALLAS ---
-
                 if (!isWelcomeSeen) {
-                    // 1. PANTALLA DE BIENVENIDA (Solo la primera vez)
                     WelcomeScreen(onStartClick = {
                         SettingsStore.setWelcomeSeen(context)
                         isWelcomeSeen = true
                     })
                 }
                 else if (!readerPosts.isNullOrEmpty()) {
-                    // 2. LECTOR DE IMÁGENES / HILOS (FullScreen)
                     FullScreenReader(
                         posts = readerPosts!!,
-                        initialIndex = readerIndex, // Aquí usamos la variable que ya declaramos arriba
+                        initialIndex = readerIndex,
+                        initialGalleryMode = startInGallery,
                         onBack = { viewModel.closeReader() },
                         onLoadHd = { post -> viewModel.resolveHdUrl(post) },
                         onDownload = { url ->
-                            pendingDownloadUrl = url // Usamos la variable declarada arriba
-                            saveFileLauncher.launch("file_${System.currentTimeMillis()}.jpg") // Usamos el launcher declarado arriba
-                        }
+                            pendingDownloadUrl = url
+                            saveFileLauncher.launch("file_${System.currentTimeMillis()}.jpg")
+                        },
+                        onLoadMore = { viewModel.loadMoreReaderContent() },
+                        onOpenGallery = { post -> viewModel.openGallery(context, post) }
                     )
                     BackHandler { viewModel.closeReader() }
                 }
                 else if (galleryPages != null) {
-                    // 3. LECTOR DE GALERÍAS (Scroll Vertical)
                     GalleryReader(
                         pages = galleryPages!!,
                         title = viewModel.currentGalleryTitle,
@@ -136,19 +130,17 @@ class MainActivity : ComponentActivity() {
                     BackHandler { viewModel.closeGallery() }
                 }
                 else {
-                    // 4. PANTALLA PRINCIPAL (Feed)
                     FeedScreen(
                         onRequestSetup = { showSetupOverlay = true }
                     )
                 }
 
-                // --- CAPA 2: OVERLAY DE CONFIGURACIÓN (SETUP) ---
                 if (showSetupOverlay) {
                     Box(modifier = Modifier.fillMaxSize().zIndex(50f)) {
                         SetupScreen(
                             onFinished = {
                                 showSetupOverlay = false
-                                viewModel.reloadCredentials(context) // Recargar al guardar
+                                viewModel.reloadCredentials(context)
                             },
                             onCancel = { showSetupOverlay = false }
                         )
@@ -156,7 +148,6 @@ class MainActivity : ComponentActivity() {
                     BackHandler { showSetupOverlay = false }
                 }
 
-                // --- CAPA 3: BYPASS CLOUDFLARE ---
                 if (currentSource == SourceType.VERCOMICS && !verComicsReady && !viewModel.isBypassCancelled) {
                     Box(modifier = Modifier.fillMaxSize().zIndex(99f)) {
                         CloudflareBypass(
@@ -166,7 +157,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // --- CAPA 4: MONITOR DE RECURSOS ---
                 Box(modifier = Modifier.zIndex(100f)) {
                     DebugMonitor()
                 }

@@ -13,7 +13,6 @@ object FourChanModule {
         try {
             val response = NetworkModule.api4Chan.get4ChanBoards()
             return@withContext response.boards.map { board ->
-                // Formato: /a/ - Anime & Manga
                 AutocompleteDto(
                     label = "/${board.board}/ - ${board.title}",
                     value = board.board
@@ -25,7 +24,7 @@ object FourChanModule {
         }
     }
     suspend fun getThreads(page: Int, boardQuery: String): List<UnifiedPost> = withContext(Dispatchers.IO) {
-        // [MODIFICADO] Sin try-catch
+
         val board = if (boardQuery.isBlank()) "gif" else boardQuery.trim().lowercase()
         val apiPage = page + 1
 
@@ -43,7 +42,6 @@ object FourChanModule {
             Log.d("4CHAN", "Fetching thread: /$board/$threadId")
             val response = NetworkModule.api4Chan.get4ChanThread(board, threadId)
 
-            // Filtramos solo los posts que tengan archivos multimedia (tim != null)
             return@withContext response.posts.mapNotNull { post ->
                 mapToUnifiedPost(post, board)
             }
@@ -63,13 +61,9 @@ object FourChanModule {
                 else -> MediaType.IMAGE
             }
 
-            // LIMPIEZA DE HTML (COMENTARIO)
-            // Esto irá al campo 'title' para mostrarse abajo
             val rawComment = op.com ?: op.sub ?: ""
             val cleanComment = Jsoup.parse(rawComment).text()
 
-            // NOMBRE DE ARCHIVO
-            // Esto irá al campo 'tags' para mostrarse arriba
             val filename = "${op.tim}${op.ext}"
             val replyCount = op.replies ?: 0
             val replyTag = "R:$replyCount"

@@ -32,7 +32,6 @@ data class AutocompleteDto(
     val label: String,
     val value: String
 )
-// --- Soporte para Sprites (Recortes) ---
 data class GalleryPageDto(
     val index: Int,
     val thumbUrl: String,
@@ -42,7 +41,6 @@ data class GalleryPageDto(
     val thumbX: Int? = null,
     val thumbY: Int? = null
 )
-
 data class E621Response(
     val posts: List<E621PostDto>
 )
@@ -68,7 +66,6 @@ data class E621Tags(
     val copyright: List<String>,
     val artist: List<String>
 )
-
 data class FourChanPageDto(
     val threads: List<FourChanThreadContainer>
 )
@@ -93,7 +90,6 @@ data class FourChanBoardDto(
     val title: String,
     val meta_description: String?
 )
-// --- REDDIT DTOs ---
 data class RedditResponse(
     val data: RedditData)
 data class RedditData(
@@ -127,27 +123,22 @@ data class RedditVideo(
     val fallback_url: String?,
     val hls_url: String?
 )
-
 data class RedditPreview(
     val images: List<RedditPreviewImage>?,
     val reddit_video_preview: RedditVideo?
 )
-
 data class RedditPreviewImage(
     val source: RedditImageSource?,
     val resolutions: List<RedditImageSource>?,
     val variants: RedditPreviewVariants?
 )
-
 data class RedditPreviewVariants(
     val mp4: RedditVariantItem?,
     val gif: RedditVariantItem?
 )
-
 data class RedditVariantItem(
     val source: RedditImageSource?
 )
-
 data class RedditImageSource(
     val url: String?, val u: String?,
     val width: Int?, val x: Int?,
@@ -157,21 +148,18 @@ data class RedditImageSource(
     fun getWidth(): Int = width ?: x ?: 0
     fun getHeight(): Int = height ?: y ?: 0
 }
-
 data class RedditGalleryData(
     val items: List<RedditGalleryItem>
 )
 data class RedditGalleryItem(
     val media_id: String
 )
-
 data class RedditMediaMetadata(
     val s: RedditImageSource?,
     val e: String?,
     val p: List<RedditImageSource>?,
     val o: List<RedditImageSource>?
 )
-
 data class RedditSearchResponse(
     val data: RedditSearchData?
 )

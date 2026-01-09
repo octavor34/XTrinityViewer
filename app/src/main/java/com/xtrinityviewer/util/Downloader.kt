@@ -35,7 +35,6 @@ object Downloader {
     private const val CHANNEL_NAME = "Descargas Trinity"
     private var notificationIdCounter = 1000
 
-    // 1. CALCULAR NOMBRE
     fun calculateFileName(post: UnifiedPost): String {
         if (post.type == MediaType.GALLERY) {
             return "Trinity_${post.source.name}_${post.id}.zip"
@@ -58,7 +57,6 @@ object Downloader {
         return "Trinity_${post.source.name}_${post.id}$extension"
     }
 
-    // 2. CALCULAR MIME TYPE
     fun calculateMimeType(post: UnifiedPost): String {
         if (post.type == MediaType.GALLERY) {
             return "application/zip"
@@ -76,7 +74,6 @@ object Downloader {
         }
     }
 
-    // 3. RUTEO INTELIGENTE DE DESCARGA
     suspend fun downloadToUri(context: Context, post: UnifiedPost, destinationUri: Uri) {
         if (post.type == MediaType.GALLERY) {
             downloadGalleryAsZip(context, post, destinationUri)
@@ -85,7 +82,6 @@ object Downloader {
         }
     }
 
-    // --- LÓGICA DE UN SOLO ARCHIVO ---
     private suspend fun downloadSingleFile(context: Context, post: UnifiedPost, destinationUri: Uri) = withContext(Dispatchers.IO) {
         val notifyId = notificationIdCounter++
         val manager = NotificationManagerCompat.from(context)
@@ -133,7 +129,6 @@ object Downloader {
         }
     }
 
-    // --- LÓGICA: DESCARGA DE GALERÍA COMO ZIP ---
     private suspend fun downloadGalleryAsZip(context: Context, post: UnifiedPost, destinationUri: Uri) = withContext(Dispatchers.IO) {
         val notifyId = notificationIdCounter++
         val manager = NotificationManagerCompat.from(context)
@@ -145,8 +140,6 @@ object Downloader {
 
         try {
             val client = createClient()
-
-            // 1. OBTENER LISTA DE IMÁGENES
             val imageUrls = fetchGalleryImages(post)
 
             if (imageUrls.isEmpty()) throw Exception("No se encontraron imágenes en la galería.")
@@ -155,17 +148,13 @@ object Downloader {
             builder.setProgress(imageUrls.size, 0, false)
             try { manager.notify(notifyId, builder.build()) } catch (e: SecurityException) { }
 
-            // 2. PREPARAR ZIP
             val outputStream = context.contentResolver.openOutputStream(destinationUri)
                 ?: throw Exception("Error creando ZIP")
             val zipOutputStream = ZipOutputStream(outputStream)
-
-            // 3. LOOP DE DESCARGA
             var successCount = 0
 
             for ((index, url) in imageUrls.withIndex()) {
                 try {
-                    // Actualizar notificación
                     builder.setContentText("Imagen ${index + 1} de ${imageUrls.size}")
                     builder.setProgress(imageUrls.size, index, false)
                     try { manager.notify(notifyId, builder.build()) } catch (e: SecurityException) { }
@@ -174,7 +163,6 @@ object Downloader {
                     val response = client.newCall(request).execute()
 
                     if (response.isSuccessful && response.body != null) {
-                        // Nombre dentro del ZIP
                         val ext = url.substringAfterLast(".", "jpg").take(3)
                         val entryName = "imagen_${String.format("%03d", index + 1)}.$ext"
 
@@ -209,9 +197,6 @@ object Downloader {
         }
     }
 
-    // --- HELPERS (AHORA CON SUSPEND) ---
-
-    // Agregado 'suspend'
     private suspend fun fetchGalleryImages(post: UnifiedPost): List<String> {
         return try {
             when (post.source) {
@@ -253,7 +238,6 @@ object Downloader {
             .build()
     }
 
-    // Agregado 'suspend' porque llama a EHentaiModule.getRealImageUrl
     private suspend fun buildRequest(post: UnifiedPost, targetUrl: String): Request {
         val requestBuilder = Request.Builder().url(targetUrl)
         val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -295,7 +279,6 @@ object Downloader {
         try { manager.notify(id, builder.build()) } catch (e: SecurityException) { }
     }
 
-    // Agregado 'suspend' para poder usar withContext(Main)
     private suspend fun finishNotification(context: Context, manager: NotificationManagerCompat, builder: NotificationCompat.Builder, id: Int, uri: Uri, mimeType: String?, customMsg: String? = null) {
         val openIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, mimeType ?: "*/*")
@@ -313,18 +296,15 @@ object Downloader {
 
         try { manager.notify(id, builder.build()) } catch (e: SecurityException) { }
 
-        // Aquí estaba el error, ahora funciona porque la función es 'suspend'
         withContext(Dispatchers.Main) {
             Toast.makeText(context, customMsg ?: "Guardado exitoso", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Agregado 'suspend' para poder usar withContext(Main)
     private suspend fun failNotification(context: Context, manager: NotificationManagerCompat, builder: NotificationCompat.Builder, id: Int, error: String?) {
         builder.setContentTitle("Error").setContentText(error).setOngoing(false).setProgress(0, 0, false)
         try { manager.notify(id, builder.build()) } catch (ex: SecurityException) { }
 
-        // Aquí estaba el error, ahora funciona porque la función es 'suspend'
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "Falló: $error", Toast.LENGTH_LONG).show()
         }

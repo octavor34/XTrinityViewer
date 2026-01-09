@@ -45,24 +45,18 @@ import kotlinx.coroutines.withContext
 fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
-    // Cargar credenciales
     val currentCreds = remember { SettingsStore.getCredentials(context) }
     var isBackupEnabled by remember { mutableStateOf(SettingsStore.isBackupEnabled(context)) }
-
     var r34User by remember { mutableStateOf(currentCreds["r34_user"] ?: "") }
     var r34Key by remember { mutableStateOf(currentCreds["r34_key"] ?: "") }
     var e621User by remember { mutableStateOf(currentCreds["e621_user"] ?: "") }
     var e621Key by remember { mutableStateOf(currentCreds["e621_key"] ?: "") }
-
-    // Estados para Blacklist
     var globalBlacklist by remember { mutableStateOf(BlacklistManager.getListString(null)) }
     var selectedSourceForBlacklist by remember { mutableStateOf(SourceType.R34) }
     var specificBlacklist by remember(selectedSourceForBlacklist) {
         mutableStateOf(BlacklistManager.getListString(selectedSourceForBlacklist))
     }
     var isSourceDropdownExpanded by remember { mutableStateOf(false) }
-
     var showHelpDialog by remember { mutableStateOf(false) }
     var showErrorHelpDialog by remember { mutableStateOf(false) }
 
@@ -80,7 +74,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
-            // --- ENCABEZADO ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -103,7 +96,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
             Spacer(modifier = Modifier.height(30.dp))
 
-            // --- 1. PRIVACIDAD Y NUBE ---
             Text("PRIVACIDAD", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
 
@@ -157,21 +149,17 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // --- 2. GESTIÓN DE LLAVES API (PROTEGIDAS) ---
             Text("LLAVES DE API", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
 
-            // Rule 34
             Text("Rule34", color = Color(0xFF8BC34A), fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
 
-            // Usamos el nuevo componente SecretField
             SecretField(value = r34User, onValueChange = { r34User = it }, label = "User ID", color = Color(0xFF8BC34A))
             Spacer(Modifier.height(4.dp))
             SecretField(value = r34Key, onValueChange = { r34Key = it }, label = "API Key", color = Color(0xFF8BC34A))
 
             Spacer(Modifier.height(16.dp))
 
-            // E621
             Text("E621", color = Color(0xFF003E6B), fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
             SecretField(value = e621User, onValueChange = { e621User = it }, label = "Username", color = Color(0xFF003E6B))
             Spacer(Modifier.height(4.dp))
@@ -179,8 +167,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
             Spacer(Modifier.height(24.dp))
 
-            // --- 3. GESTIÓN DE BLACKLIST ---
-            // ... (Igual que antes) ...
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Block, null, tint = Color.Red, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
@@ -188,7 +174,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
 
-            // ... Global Blacklist
             OutlinedTextField(
                 value = globalBlacklist,
                 onValueChange = {
@@ -203,7 +188,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
                 minLines = 2, maxLines = 4
             )
 
-            // ... Individual Blacklist
             Spacer(Modifier.height(16.dp))
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
@@ -253,7 +237,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
             Spacer(Modifier.height(24.dp))
 
-            // --- 4. MANTENIMIENTO ---
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Default.Delete, null, tint = Color.LightGray, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
@@ -282,14 +265,12 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
                     Button(
                         onClick = {
                             scope.launch(Dispatchers.IO) {
-                                // 1. Limpiar Caché de IMÁGENES (Coil)
                                 context.imageLoader.diskCache?.clear()
                                 context.imageLoader.memoryCache?.clear()
 
                                 try {
                                     val videoCacheDir = java.io.File(context.cacheDir, "trinity_video_cache")
                                     if (videoCacheDir.exists()) {
-                                        // Borra la carpeta y todo su contenido
                                         videoCacheDir.deleteRecursively()
                                     }
                                 } catch (e: Exception) {
@@ -311,7 +292,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
             Spacer(Modifier.height(40.dp))
 
-            // --- BOTÓN GUARDAR ---
             Button(
                 onClick = {
                     SettingsStore.saveCredentials(context, r34User, r34Key, e621User, e621Key)
@@ -346,7 +326,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
                     .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Usamos un rojo suave para que se note pero no sea alarmante
                 Icon(Icons.Default.BugReport, null, tint = Color.Red.copy(alpha = 0.6f))
                 Spacer(Modifier.width(8.dp))
                 Text("¿Qué hago si la app falla?", color = Color.Gray)
@@ -354,7 +333,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
             Spacer(Modifier.height(20.dp))
         }
     }
-    // Diálogo de ayuda
     if (showHelpDialog) {
         Dialog(onDismissRequest = { showHelpDialog = false }) {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF222222))) {
@@ -396,7 +374,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
                     Spacer(Modifier.height(12.dp))
 
-                    // Instrucciones paso a paso
                     Text("1. Toca el botón 'COPIAR' en esa pantalla.", color = Color.Gray, fontSize = 13.sp)
                     Spacer(Modifier.height(4.dp))
                     Text("2. Mándame el texto copiado.", color = Color.Gray, fontSize = 13.sp)
@@ -418,7 +395,6 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
     }
 }
 
-// --- COMPONENTE NUEVO: Campo de texto con ojito para mostrar/ocultar ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SecretField(
@@ -440,7 +416,6 @@ fun SecretField(
         ),
         modifier = Modifier.fillMaxWidth(),
         singleLine = true,
-        // ESTO HACE LA MAGIA: Si no es visible, muestra puntos. Si es visible, muestra texto.
         visualTransformation = if (isVisible) VisualTransformation.None else PasswordVisualTransformation(),
         trailingIcon = {
             val image = if (isVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff

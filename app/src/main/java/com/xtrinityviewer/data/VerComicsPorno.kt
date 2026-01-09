@@ -18,7 +18,6 @@ import java.util.concurrent.TimeUnit
 object VerComicsModule {
     private const val BASE_URL = "https://vercomicsporno.com"
     const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
-
     private val masterCookieList = mutableListOf<Cookie>()
 
     fun getCookiesAsString(): String {
@@ -70,7 +69,6 @@ object VerComicsModule {
         })
         .build()
 
-    // --- 1. AUTOCOMPLETADO DE TAGS ---
     suspend fun getTags(): List<AutocompleteDto> = withContext(Dispatchers.IO) {
         try {
             val doc = fetchHtmlConRetry(BASE_URL) ?: return@withContext emptyList()
@@ -93,7 +91,6 @@ object VerComicsModule {
         } catch (e: Exception) { return@withContext emptyList() }
     }
 
-    // --- 2. FEED PRINCIPAL ---
     @SuppressLint("SuspiciousIndentation")
     suspend fun getComics(page: Int, query: String = ""): List<UnifiedPost> = withContext(Dispatchers.IO) {
         val paged = page + 1
@@ -110,42 +107,29 @@ object VerComicsModule {
         val doc = fetchHtmlConRetry(url)
             ?: throw Exception("No se pudo conectar a VerComics")
             if (query.isNotBlank()) {
-                // A) Chequeo de og:url [Basado en Fuente 7]
-                // Una búsqueda válida SIEMPRE tiene "comics-porno" en su og:url.
-                // Si nos redirigen al Home, el og:url será solo "https://vercomicsporno.com/"
                 val ogUrl = doc.select("meta[property=og:url]").attr("content")
                 if (!ogUrl.contains("comics-porno")) {
                     return@withContext emptyList()
                 }
-
-                // B) Chequeo de clase del Body [Basado en Fuente 1]
-                // Tu archivo muestra <body class="page-template ..."> en una búsqueda válida.
-                // Si el body tiene la clase "home", es que estamos en el inicio por error.
                 if (doc.body().hasClass("home")) {
                     return@withContext emptyList()
                 }
             }
             val posts = mutableListOf<UnifiedPost>()
-
-            // El selector sigue siendo el mismo según la Fuente 46 de tu archivo (.entry)
             val elements = doc.select("div.blog-list-items div.entry")
 
             for (el in elements) {
                 val linkTag = el.selectFirst("a.popimg") ?: continue
                 val href = linkTag.attr("href")
-
-                // TÍTULO
                 val titleTag = el.selectFirst("h2.information a")
                 val title = titleTag?.attr("title") ?: titleTag?.text() ?: "Sin título"
-
-                // FILTRO ANTI-VIP (Igual que antes)
                 val lowerTitle = title.lowercase()
                 val lowerHref = href.lowercase()
+
                 if (lowerTitle.contains("fanbox") || lowerTitle.contains("toonxvip")) {
                     continue
                 }
 
-                // IMAGEN (Lógica mantenida)
                 val imgTag = el.selectFirst("figure img")
                 var thumb = ""
 
@@ -166,7 +150,7 @@ object VerComicsModule {
                             type = MediaType.GALLERY,
                             source = SourceType.VERCOMICS,
                             title = title,
-                            tags = emptyList(), // VCP no expone tags fáciles en el grid
+                            tags = emptyList(),
                             aspectRatio = 0.7f
                         )
                     )
@@ -174,37 +158,32 @@ object VerComicsModule {
             }
             return@withContext posts
     }
-    // --- 3. LECTOR (LIMPIEZA PROFUNDA) ---
+
     suspend fun getChapterImages(url: String): List<GalleryPageDto> = withContext(Dispatchers.IO) {
         try {
             val doc = fetchHtmlConRetry(url) ?: return@withContext emptyList()
             val pages = mutableListOf<GalleryPageDto>()
-
-            // Selector Base
             val contentDiv = doc.selectFirst(".wp-content") ?: doc.body()
             val images = contentDiv.select("img")
-
             var index = 0
             for (img in images) {
                 var src = img.attr("src")
+
                 if (src.isEmpty()) src = img.attr("data-src")
+
                 if (!src.startsWith("http")) continue
 
-                // --- FILTROS DE LIMPIEZA ---
-
-                // 1. CLASES PROHIBIDAS (Miniaturas de Wordpress)
                 val imgClass = img.className().lowercase()
+
                 if (imgClass.contains("attachment-comics-thumb") || // Miniatura de post relacionado
                     imgClass.contains("wp-post-image") ||           // Portada pequeña
                     imgClass.contains("avatar")) {                  // Avatar de usuario
                     continue
                 }
 
-                // 2. ARCHIVOS PROHIBIDOS
                 if (src.endsWith(".mp4") || src.endsWith(".webm") || src.contains("downloadbutton", true) ||
                     src.contains("logo", true) || src.contains("vip", true)) continue
 
-                // 3. PADRES TÓXICOS (Sliders y Widgets)
                 var isJunk = false
                 for (parent in img.parents()) {
                     val pClass = parent.className().lowercase()
