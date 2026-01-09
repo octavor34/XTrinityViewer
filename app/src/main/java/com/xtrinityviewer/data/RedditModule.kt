@@ -1,12 +1,8 @@
 package com.xtrinityviewer.data
 
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Request
-import com.google.gson.JsonParser
-import com.google.gson.JsonArray
-import com.google.gson.JsonObject
+
 
 object RedditModule {
     private val paginationMap = mutableMapOf<Int, String>()
@@ -211,5 +207,23 @@ object RedditModule {
             android.util.Log.e("REDDIT_DEBUG", "Error parseando galería: ${e.message}")
             return@withContext emptyList()
         }
+    }
+    suspend fun searchInSubreddit(page: Int, subreddit: String, query: String): List<UnifiedPost> = withContext(Dispatchers.IO) {
+        val cleanSub = subreddit.replace("r/", "").trim()
+        val after = if (page == 0) null else paginationMap[page]
+
+        val response = NetworkModule.apiReddit.searchRedditPosts(
+            subreddit = cleanSub,
+            query = query,
+            restrictSr = "on",
+            nsfw = "1",
+            sort = "relevance",
+            limit = 25,
+            after = after
+        )
+
+        response.data.after?.let { nextToken -> paginationMap[page + 1] = nextToken }
+
+        return@withContext response.data.children.mapNotNull { child -> mapToUnifiedPost(child.data) }
     }
 }

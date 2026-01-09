@@ -1,7 +1,6 @@
 package com.xtrinityviewer.data
 
 import android.content.Context
-import android.content.SharedPreferences
 
 object BlacklistManager {
     private const val PREFS_NAME = "blacklist_prefs"

@@ -2,6 +2,7 @@ package com.xtrinityviewer.ui
 
 import android.os.Build.VERSION.SDK_INT
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -61,6 +62,7 @@ import com.xtrinityviewer.data.VerComicsModule
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -69,7 +71,7 @@ fun FullScreenReader(
     posts: List<UnifiedPost>,
     initialIndex: Int,
     initialGalleryMode: Boolean = false,
-    onBack: () -> Unit,
+    onBack: (Int) -> Unit,
     onLoadHd: suspend (UnifiedPost) -> String,
     onDownload: (String) -> Unit,
     onLoadMore: () -> Unit,
@@ -81,8 +83,9 @@ fun FullScreenReader(
     // ESTADOS
     var isGalleryMode by remember(initialGalleryMode) { mutableStateOf(initialGalleryMode) }
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { posts.size })
+    val gridState = rememberLazyGridState()
     var isZoomActive by remember { mutableStateOf(false) }
-    var showOverlay by remember { mutableStateOf(true) }
+    var showOverlay by remember { mutableStateOf(false) }
     val currentPost = posts.getOrNull(pagerState.currentPage)
     val isStaticBoard = remember(currentPost) {
         val src = currentPost?.source
@@ -91,6 +94,14 @@ fun FullScreenReader(
                 src == SourceType.REALBOORU
     }
     val allowSwipe = !isStaticBoard
+    LaunchedEffect(isGalleryMode) {
+        if (isGalleryMode) {
+            gridState.scrollToItem(pagerState.currentPage)
+        }
+    }
+    BackHandler {
+        onBack(pagerState.currentPage)
+    }
     DisposableEffect(Unit) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -107,15 +118,27 @@ fun FullScreenReader(
                         .windowInsetsPadding(WindowInsets.statusBars)
                         .height(56.dp)
                 ) {
-                    IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart)) {
-                        Icon(Icons.Default.ArrowBack, "Atrás", tint = Color.White)
+                    IconButton(
+                        onClick = { onBack(pagerState.currentPage) },
+                        modifier = Modifier.align(Alignment.CenterStart)) {
+                        Icon(Icons.Default.ArrowBack,
+                            "Atrás", tint = Color.White)
                     }
                     Text("${posts.size} Archivos", color = Color.White, modifier = Modifier.align(Alignment.Center))
-                    IconButton(onClick = { isGalleryMode = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
-                        Icon(Icons.Default.ViewCarousel, "Modo Lector", tint = Color.White)
+
+                    IconButton(onClick = {
+                        scope.launch { pagerState.scrollToPage(gridState.firstVisibleItemIndex) }
+                        isGalleryMode = false
+                    }, modifier = Modifier.align(Alignment.CenterEnd)) {
+                        Icon(Icons.Default.ViewCarousel, "Lector", tint = Color.White)
                     }
                 }
-                LazyVerticalGrid(columns = GridCells.Adaptive(100.dp), modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(100.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    state = gridState,
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
                     itemsIndexed(posts) { index, post ->
                         Box(Modifier.aspectRatio(1f).padding(2.dp).clickable {
                             if (post.source == SourceType.EHENTAI ||
@@ -280,7 +303,7 @@ fun FullScreenReader(
             ) {
                 Box(Modifier.fillMaxSize()) {
                     IconButton(
-                        onClick = onBack,
+                        onClick = { onBack(pagerState.currentPage) },
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(top = 40.dp, start = 10.dp)
@@ -318,7 +341,7 @@ fun FullScreenReader(
 
                     OverlayInfo(
                         post = posts.getOrNull(pagerState.currentPage),
-                        onBack = onBack
+                        onBack = { onBack(pagerState.currentPage) }
                     )
                 }
             }
@@ -435,6 +458,14 @@ fun ZoomableImageContainer(
 fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
     if (post == null) return
 
+    val isCleanMode = post.source == SourceType.R34 ||
+            post.source == SourceType.E621 ||
+            post.source == SourceType.REALBOORU ||
+            post.source == SourceType.EHENTAI ||
+            post.source == SourceType.VERCOMICS
+
+    if (isCleanMode) return
+
     Box(
         modifier = Modifier
             .align(Alignment.BottomStart)
@@ -442,8 +473,13 @@ fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
             .background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black.copy(0.9f))))
             .padding(16.dp)
             .padding(bottom = 30.dp)
+            .clickable(enabled = false) {}
     ) {
-        Column {
+        Column(modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(16.dp)
+            .padding(bottom = 20.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val sourceColor = when(post.source) {
                     SourceType.EHENTAI -> Color(0xFFE91E63)
@@ -453,32 +489,39 @@ fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
                     SourceType.REDDIT -> Color(0xFFFF5700)
                     else -> Color(0xFFAAE5A4)
                 }
-                ReaderBadge(text = post.source.name, color = sourceColor)
-                Spacer(Modifier.width(8.dp))
-                if (post.tags.isNotEmpty() && post.tags[0].startsWith("R:")) {
-                    ReaderBadge(text = "Replies: " + post.tags[0].removePrefix("R:"), color = Color.Blue)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
+                Badge(text = post.source.name, color = sourceColor)
 
-                var badgeText = "IMG"
-                when (post.type) {
-                    MediaType.VIDEO -> badgeText = "VIDEO"
-                    MediaType.GIF -> badgeText = "GIF"
-                    else -> {
-                        val ext = post.url.substringAfterLast('.', "JPG").uppercase()
-                        badgeText = if(ext.length in 3..4) ext else "IMG"
+                if (!isCleanMode) {
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val typeName = when(post.type) {
+                        MediaType.VIDEO -> "VIDEO"
+                        MediaType.GIF -> "GIF"
+                        MediaType.GALLERY -> "GALERÍA"
+                        else -> "IMG"
+                    }
+                    Badge(text = typeName, color = Color.Gray)
+
+                    if (post.source == SourceType.CHAN) {
+                        val replyTag = post.tags.find { it.startsWith("R:") }
+                        if (replyTag != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Badge(text = "${replyTag.removePrefix("R:")} Posts", color = Color(0xFFFFD600))
+                        }
                     }
                 }
-                ReaderBadge(text = badgeText, color = Color.DarkGray)
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = post.title,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 6,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (!isCleanMode && post.title.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = post.title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

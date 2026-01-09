@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
@@ -120,7 +120,7 @@ fun WelcomeScreen(onStartClick: () -> Unit) {
                     color = Color.Black
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Icon(Icons.Default.ArrowForward, null, tint = Color.Black)
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = Color.Black)
             }
 
             Spacer(modifier = Modifier.height(20.dp))

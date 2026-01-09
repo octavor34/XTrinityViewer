@@ -249,7 +249,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 SourceType.REALBOORU,
                 SourceType.REDDIT,
                 SourceType.CHAN,
-                SourceType.EHENTAI -> return null;
+                SourceType.EHENTAI -> return null
                 else -> {}
             }
         }
@@ -317,7 +317,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val clean = tag.trim()
         if (clean.isBlank()) return
         val current = _tagsList.value.toMutableList()
-        if (_currentSource.value == SourceType.CHAN || _currentSource.value == SourceType.REDDIT) {
+
+        if (_currentSource.value == SourceType.REDDIT) {
+           if (clean.startsWith("r/")) {
+                current.clear()
+            }
+            else if (current.isNotEmpty()) {
+                if (current.size >= 2) {
+                    current.removeAt(1)
+                }
+            }
+        }
+        else if (_currentSource.value == SourceType.CHAN) {
             current.clear()
         }
 
@@ -328,9 +339,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun removeTag(tag: String) {
-        val current = _tagsList.value.toMutableList();
-        current.remove(tag);
-        _tagsList.value = current;
+        val current = _tagsList.value.toMutableList()
+        current.remove(tag)
+        _tagsList.value = current
         resetAndReload()
     }
 
@@ -347,7 +358,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setFilter(filter: FileFilter) {
         if (_currentFilter.value != filter) {
-            _currentFilter.value = filter;
+            _currentFilter.value = filter
             resetAndReload()
         }
     }
@@ -564,13 +575,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         resetAndReload()
     }
     fun openFeedInReader(index: Int, startGallery: Boolean = false) {
-        _readerPosts.value = _feed.value;
+        _readerPosts.value = _feed.value
         _readerIndex.value = index
         _startInGalleryMode.value = startGallery
     }
-    fun closeReader() { _readerPosts.value = null }
+    fun closeReader(targetIndex: Int = -1) {
+        if (targetIndex != -1) saveFeedPosition(targetIndex)
+        _readerPosts.value = null
+        _startInGalleryMode.value = false
+    }
     fun saveGalleryPosition(index: Int, offset: Int) {
-        galleryScrollIndex = index;
+        galleryScrollIndex = index
         galleryScrollOffset = offset
     }
     fun reviveBypass() {

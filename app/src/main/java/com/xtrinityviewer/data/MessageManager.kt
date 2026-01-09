@@ -7,7 +7,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.xtrinityviewer.R
 import java.io.InputStreamReader
 
 data class RandomMessageDto(

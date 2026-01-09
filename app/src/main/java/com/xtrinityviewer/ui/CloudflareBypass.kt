@@ -1,7 +1,6 @@
 package com.xtrinityviewer.ui
 
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebSettings

@@ -1,9 +1,6 @@
 package com.xtrinityviewer
 
-import android.app.Activity
-import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -104,7 +101,7 @@ class MainActivity : ComponentActivity() {
                         posts = readerPosts!!,
                         initialIndex = readerIndex,
                         initialGalleryMode = startInGallery,
-                        onBack = { viewModel.closeReader() },
+                        onBack = { finalIndex -> viewModel.closeReader(finalIndex) },
                         onLoadHd = { post -> viewModel.resolveHdUrl(post) },
                         onDownload = { url ->
                             pendingDownloadUrl = url

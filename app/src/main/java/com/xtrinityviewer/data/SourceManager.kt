@@ -1,6 +1,5 @@
 package com.xtrinityviewer.data
 
-import android.content.Context
 
 object SourceManager {
     private val r34 = R34Module()

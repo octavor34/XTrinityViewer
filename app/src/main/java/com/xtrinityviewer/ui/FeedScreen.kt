@@ -57,7 +57,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.imageLoader
 import com.xtrinityviewer.R
-import com.xtrinityviewer.R.drawable
 import com.xtrinityviewer.data.MediaType
 import com.xtrinityviewer.data.SourceType
 import com.xtrinityviewer.data.UnifiedPost

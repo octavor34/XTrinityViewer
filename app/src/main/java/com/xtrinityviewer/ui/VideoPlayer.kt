@@ -1,7 +1,6 @@
 package com.xtrinityviewer.ui
 
 import android.app.Activity
-import android.content.Context
 import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -25,7 +24,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
