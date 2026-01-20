@@ -67,6 +67,11 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import com.xtrinityviewer.data.SettingsStore
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.animation.AnimatedVisibility
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -101,6 +106,8 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
     val redditColor = Color(0xFFFF5700)
     val chanColor = Color(0xFF43A047)
     val verComicsColor = Color(0xFFC0CA33)
+    val gelbooruColor = Color(0xFF0066FF)
+    val xbooruColor = Color(0xFFFF9100)
     val themeColor = when(currentSource) {
         SourceType.EHENTAI -> ehentaiColor
         SourceType.E621 -> e621Color
@@ -108,6 +115,8 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
         SourceType.CHAN -> chanColor
         SourceType.REDDIT -> redditColor
         SourceType.VERCOMICS -> verComicsColor
+        SourceType.GELBOORU -> gelbooruColor
+        SourceType.XBOORU -> xbooruColor
         else -> r34Color
     }
 
@@ -128,6 +137,12 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
     var selectedPostInfo by remember { mutableStateOf<UnifiedPost?>(null) }
     val sheetState = rememberModalBottomSheetState()
     var pendingDownloadUrl by remember { mutableStateOf("") }
+    var expanded2D by remember { mutableStateOf(true) } // Por defecto abierto
+    var expanded3D by remember { mutableStateOf(false) }
+    var expanded2DBoorus by remember { mutableStateOf(true) }
+    var expanded2DGalleries by remember { mutableStateOf(false) }
+    var expanded2DComics by remember { mutableStateOf(false) }
+    var expanded3DBoorus by remember { mutableStateOf(false) }
 
     val redditRecs = remember(currentSource) {
         listOf("nsfw", "gonewild", "realgirls", "hentai", "rule34", "ecchi", "paizuri", "thighdeology", "anal", "cumsluts", "collegesluts", "legalteens", "milf", "tinyclits", "godpussy", "holdthemoan", "gettingherselfoff").shuffled()
@@ -242,72 +257,198 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
                                 )
                             }
                             Spacer(Modifier.width(16.dp))
-                            Text("XTRINITY", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 2.sp)
+                            Text("XTRINITYVIEWER", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 2.sp)
                         }
                     }
                 }
                 HorizontalDivider(color = Color(0xFF333333))
                 Spacer(Modifier.height(16.dp))
 
-                val items = listOf(
-                    Triple("Rule34", R.drawable.ic_r34, SourceType.R34),
-                    Triple("E-Hentai-Galleries", R.drawable.ic_ehentai, SourceType.EHENTAI),
-                    Triple("VerComicsPorno", R.drawable.ic_vercomics, SourceType.VERCOMICS),
-                    Triple("E621", R.drawable.ic_e621, SourceType.E621),
-                    Triple("Realbooru", R.drawable.ic_realbooru, SourceType.REALBOORU),
-                    Triple("4Chan", R.drawable.ic_4chan, SourceType.CHAN),
-                    Triple("Reddit", R.drawable.ic_reddit, SourceType.REDDIT)
-                )
                 LazyColumn(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    items(items) { (label, icon, source) ->
-                        val selected = currentSource == source
-                        val itemColor = if (source == SourceType.VERCOMICS) verComicsColor else themeColor
-
-                        NavigationDrawerItem(
-                            label = {
-                                Text(
-                                    label,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            icon = {
-                                Image(
-                                    painter = painterResource(id = icon),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            },
-                            selected = selected,
-                            onClick = {
-                                var isLocked = false
-                                if (source == SourceType.R34 && !SettingsStore.hasR34Credentials(context)) isLocked = true
-                                if (source == SourceType.E621 && !SettingsStore.hasE621Credentials(context)) isLocked = true
-
-                                if (isLocked) {
-                                    scope.launch { drawerState.close() }
-                                    onRequestSetup()
-                                    Toast.makeText(context, "Se requiere API Key para $label", Toast.LENGTH_LONG).show()
-                                } else {
-                                    keyboardController?.hide()
-                                    searchText = ""
-                                    viewModel.onSearchTextChange("")
-                                    viewModel.setSource(source)
-                                    scope.launch { drawerState.close() }
-                                }
-                            },
-                            colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = itemColor.copy(0.15f),
-                                selectedTextColor = itemColor,
-                                unselectedTextColor = Color.LightGray,
-                                unselectedContainerColor = Color.Transparent
-                            ),
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                            shape = RoundedCornerShape(12.dp)
+                    item {
+                        ExpandableHeader(
+                            label = "Waifus 2D",
+                            isExpanded = expanded2D,
+                            onToggle = { expanded2D = !expanded2D },
+                            level = 0,
+                            iconVector = Icons.Default.Favorite
                         )
+                    }
+
+                    item {
+                        AnimatedVisibility(visible = expanded2D) {
+                            Column {
+                                ExpandableHeader(
+                                    label = "Boorus",
+                                    isExpanded = expanded2DBoorus,
+                                    onToggle = { expanded2DBoorus = !expanded2DBoorus },
+                                    level = 1,
+                                    iconVector = Icons.Default.ImageSearch
+                                )
+
+                                AnimatedVisibility(visible = expanded2DBoorus) {
+                                    Column {
+                                        DrawerItem(
+                                            label = "Rule34",
+                                            iconRes = R.drawable.ic_r34,
+                                            source = SourceType.R34,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            context = context,
+                                            scope = scope,
+                                            drawerState = drawerState,
+                                            viewModel = viewModel,
+                                            keyboardController = keyboardController,
+                                            onRequestSetup = onRequestSetup
+                                        )
+
+                                        DrawerItem(
+                                            label = "E621",
+                                            iconRes = R.drawable.ic_e621,
+                                            source = SourceType.E621,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            context = context,
+                                            scope = scope,
+                                            drawerState = drawerState,
+                                            viewModel = viewModel,
+                                            keyboardController = keyboardController,
+                                            onRequestSetup = onRequestSetup
+                                        )
+
+                                        DrawerItem(
+                                            label = "Gelbooru",
+                                            iconRes = R.drawable.ic_gelbooru,
+                                            customColor = gelbooruColor,
+                                            source = SourceType.GELBOORU,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            context = context, scope = scope, drawerState = drawerState,
+                                            viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                        )
+
+                                        DrawerItem(
+                                            label = "Xbooru",
+                                            iconRes = R.drawable.ic_xbooru,
+                                            customColor = xbooruColor,
+                                            source = SourceType.XBOORU,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            context = context, scope = scope, drawerState = drawerState,
+                                            viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                        )
+                                    }
+                                }
+
+                                ExpandableHeader(
+                                    label = "Galerías",
+                                    isExpanded = expanded2DGalleries,
+                                    onToggle = { expanded2DGalleries = !expanded2DGalleries },
+                                    level = 1,
+                                    iconVector = Icons.Default.PhotoLibrary
+                                )
+
+                                AnimatedVisibility(visible = expanded2DGalleries) {
+                                    Column {
+                                        DrawerItem(
+                                            label = "E-Hentai",
+                                            iconRes = R.drawable.ic_ehentai,
+                                            source = SourceType.EHENTAI,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            context = context, scope = scope, drawerState = drawerState,
+                                            viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                        )
+                                    }
+                                }
+
+                                ExpandableHeader(
+                                    label = "Comics",
+                                    isExpanded = expanded2DComics,
+                                    onToggle = { expanded2DComics = !expanded2DComics },
+                                    level = 1,
+                                    iconVector = Icons.Default.MenuBook
+                                )
+
+                                AnimatedVisibility(visible = expanded2DComics) {
+                                    Column {
+                                        DrawerItem(
+                                            label = "VerComicsPorno",
+                                            iconRes = R.drawable.ic_vercomics,
+                                            source = SourceType.VERCOMICS,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            customColor = verComicsColor,
+                                            context = context, scope = scope, drawerState = drawerState,
+                                            viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        HorizontalDivider(color = Color(0xFF222222), modifier = Modifier.padding(vertical = 8.dp)) // Separador
+                        ExpandableHeader(
+                            label = "Waifus 3D",
+                            isExpanded = expanded3D,
+                            onToggle = { expanded3D = !expanded3D },
+                            level = 0,
+                            iconVector = Icons.Default.Person
+                        )
+                    }
+
+                    item {
+                        AnimatedVisibility(visible = expanded3D) {
+                            Column {
+                                ExpandableHeader(
+                                    label = "Boorus",
+                                    isExpanded = expanded3DBoorus,
+                                    onToggle = { expanded3DBoorus = !expanded3DBoorus },
+                                    level = 1,
+                                    iconVector = Icons.Default.ImageSearch
+                                )
+
+                                AnimatedVisibility(visible = expanded3DBoorus) {
+                                    Column {
+                                        DrawerItem(
+                                            label = "Realbooru",
+                                            iconRes = R.drawable.ic_realbooru,
+                                            source = SourceType.REALBOORU,
+                                            currentSource = currentSource,
+                                            level = 2,
+                                            context = context, scope = scope, drawerState = drawerState,
+                                            viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                        )
+                                    }
+                                }
+
+                                DrawerItem(
+                                    label = "4Chan",
+                                    iconRes = R.drawable.ic_4chan,
+                                    source = SourceType.CHAN,
+                                    currentSource = currentSource,
+                                    level = 1,
+                                    context = context, scope = scope, drawerState = drawerState,
+                                    viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                )
+
+                                DrawerItem(
+                                    label = "Reddit",
+                                    iconRes = R.drawable.ic_reddit,
+                                    source = SourceType.REDDIT,
+                                    currentSource = currentSource,
+                                    level = 1,
+                                    context = context, scope = scope, drawerState = drawerState,
+                                    viewModel = viewModel, keyboardController = keyboardController, onRequestSetup = onRequestSetup
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -927,4 +1068,98 @@ fun FeedScreen(onRequestSetup: () -> Unit) {
             }
         )
     }
+}
+
+@Composable
+fun ExpandableHeader(
+    label: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    level: Int,
+    iconVector: androidx.compose.ui.graphics.vector.ImageVector? = null
+) {
+    // Calculamos la sangría según el nivel (0 = 12dp, 1 = 32dp...)
+    val paddingStart = 12.dp + (level * 20).dp
+
+    NavigationDrawerItem(
+        label = { Text(label, fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+        selected = false,
+        onClick = onToggle,
+        icon = {
+            if (iconVector != null) {
+                Icon(iconVector, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+            }
+        },
+        badge = {
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                tint = Color.Gray
+            )
+        },
+        colors = NavigationDrawerItemDefaults.colors(
+            unselectedContainerColor = Color.Transparent,
+            unselectedTextColor = Color.LightGray
+        ),
+        modifier = Modifier.padding(start = paddingStart, end = 12.dp, top = 2.dp, bottom = 2.dp).height(48.dp)
+    )
+}
+
+// --- COMPONENTE PARA ITEMS FINALES (SITIOS) ---
+@Composable
+fun DrawerItem(
+    label: String,
+    source: SourceType,
+    currentSource: SourceType,
+    level: Int,
+    context: android.content.Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+    drawerState: DrawerState,
+    viewModel: MainViewModel,
+    keyboardController: androidx.compose.ui.platform.SoftwareKeyboardController?,
+    onRequestSetup: () -> Unit,
+    iconRes: Int? = null,
+    iconVector: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    customColor: Color? = null
+) {
+    val selected = currentSource == source
+    val itemColor = customColor ?: Color(0xFFFFDD00) // Amarillo por defecto o color personalizado
+    val paddingStart = 12.dp + (level * 20).dp
+
+    NavigationDrawerItem(
+        label = { Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, fontSize = 13.sp) },
+        selected = selected,
+        onClick = {
+            // Lógica de API Key
+            var isLocked = false
+            if (source == SourceType.R34 && !SettingsStore.hasR34Credentials(context)) isLocked = true
+            if (source == SourceType.E621 && !SettingsStore.hasE621Credentials(context)) isLocked = true
+
+            if (isLocked) {
+                scope.launch { drawerState.close() }
+                onRequestSetup()
+                Toast.makeText(context, "Se requiere API Key para $label", Toast.LENGTH_LONG).show()
+            } else {
+                keyboardController?.hide()
+                viewModel.onSearchTextChange("")
+                viewModel.setSource(source)
+                scope.launch { drawerState.close() }
+            }
+        },
+        icon = {
+            if (iconRes != null) {
+                Image(painter = painterResource(id = iconRes), contentDescription = null, modifier = Modifier.size(20.dp))
+            } else if (iconVector != null) {
+                Icon(iconVector, null, tint = itemColor, modifier = Modifier.size(20.dp))
+            }
+        },
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = itemColor.copy(0.15f),
+            selectedTextColor = itemColor,
+            unselectedTextColor = Color.LightGray,
+            unselectedContainerColor = Color.Transparent
+        ),
+        modifier = Modifier.padding(start = paddingStart, end = 12.dp, top = 2.dp, bottom = 2.dp).height(45.dp),
+        shape = RoundedCornerShape(12.dp)
+    )
 }

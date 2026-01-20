@@ -1,6 +1,5 @@
 package com.xtrinityviewer.data
 
-import android.util.Log
 import com.google.gson.GsonBuilder
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -9,6 +8,11 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
+import com.google.gson.JsonDeserializationContext
+import java.lang.reflect.Type
+import com.google.gson.reflect.TypeToken
 
 interface TrinityApi {
     // --- RULE 34 ---
@@ -17,9 +21,18 @@ interface TrinityApi {
         @Query("limit") limit: Int = 20,
         @Query("pid") page: Int = 0,
         @Query("tags") tags: String = "",
-        @Query("api_key") apiKey: String,
-        @Query("user_id") userId: String
+        @Query("api_key") apiKey: String?,
+        @Query("user_id") userId: String?
     ): List<R34Dto>
+
+    @GET("index.php?page=dapi&s=post&q=index&json=1")
+    suspend fun getGenericPosts(
+        @Query("limit") limit: Int = 20,
+        @Query("pid") page: Int = 0,
+        @Query("tags") tags: String = "",
+        @Query("api_key") apiKey: String?,
+        @Query("user_id") userId: String?
+    ): JsonElement
 
     @GET("autocomplete.php")
     suspend fun getAutocomplete(@Query("q") query: String): List<AutocompleteDto>
@@ -86,7 +99,9 @@ object NetworkModule {
     private const val E621_BASE = "https://e621.net/"
     private const val CHAN_BASE = "https://a.4cdn.org/"
     private const val REDDIT_BASE = "https://www.reddit.com/"
-    private val gson = GsonBuilder().setLenient().create()
+    val gson = GsonBuilder()
+        .setLenient()
+        .create()
 
     val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -96,15 +111,22 @@ object NetworkModule {
         .addInterceptor { chain ->
             val original = chain.request()
             val request = original.newBuilder()
-                .header("User-Agent", "TrinityViewer/1.0 (by Octavor34)")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64")
                 .build()
             chain.proceed(request)
         }
         .build()
 
-    val api: TrinityApi by lazy {
-        Retrofit.Builder().baseUrl(R34_BASE).client(client).addConverterFactory(GsonConverterFactory.create(gson)).build().create(TrinityApi::class.java)
+    fun createBooruApi(baseUrl: String): TrinityApi {
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(TrinityApi::class.java)
     }
+
+    val api: TrinityApi by lazy { createBooruApi(R34_BASE) }
 
     val apiE621: TrinityApi by lazy {
         Retrofit.Builder().baseUrl(E621_BASE).client(client).addConverterFactory(GsonConverterFactory.create(gson)).build().create(TrinityApi::class.java)
@@ -116,5 +138,32 @@ object NetworkModule {
 
     val apiReddit: TrinityApi by lazy {
         Retrofit.Builder().baseUrl(REDDIT_BASE).client(client).addConverterFactory(GsonConverterFactory.create(gson)).build().create(TrinityApi::class.java)
+    }
+}
+class BooruListDeserializer : JsonDeserializer<List<R34Dto>> {
+    override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): List<R34Dto> {
+        val list = mutableListOf<R34Dto>()
+        try {
+            if (json.isJsonArray) {
+                // Caso 1: Es una lista directa (Rule34)
+                json.asJsonArray.forEach {
+                    list.add(context.deserialize(it, R34Dto::class.java))
+                }
+            } else if (json.isJsonObject) {
+                // Caso 2: Es un objeto contenedor (Gelbooru)
+                val obj = json.asJsonObject
+                // Buscamos si la lista está en "post", "posts" o "images"
+                val array = obj.getAsJsonArray("post")
+                    ?: obj.getAsJsonArray("posts")
+                    ?: obj.getAsJsonArray("images")
+
+                array?.forEach {
+                    list.add(context.deserialize(it, R34Dto::class.java))
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
     }
 }

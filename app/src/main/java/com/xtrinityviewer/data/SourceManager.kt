@@ -1,5 +1,6 @@
 package com.xtrinityviewer.data
 
+import android.content.Context
 
 object SourceManager {
     private val r34 = R34Module()
@@ -9,6 +10,9 @@ object SourceManager {
     private val fourChan = FourChanModuleWrapper()
     private val reddit = RedditModuleWrapper()
     private val eHentai = EHentaiModuleWrapper()
+    private val gelbooru = GelbooruModule()
+    private val xbooru = XbooruModule()
+
     private val modules = mapOf(
         SourceType.R34 to r34,
         SourceType.E621 to e621,
@@ -16,17 +20,33 @@ object SourceManager {
         SourceType.REALBOORU to realbooru,
         SourceType.CHAN to fourChan,
         SourceType.REDDIT to reddit,
-        SourceType.EHENTAI to eHentai
+        SourceType.EHENTAI to eHentai,
+        SourceType.GELBOORU to gelbooru,
+        SourceType.XBOORU to xbooru
     )
 
     fun getModule(source: SourceType): SiteModule {
-        return modules[source] ?: r34 // Fallback a R34 si algo falla
+        return modules[source] ?: r34
     }
 
-    fun updateCredentials(r34User: String, r34Key: String, e621User: String, e621Key: String) {
-        r34.userId = r34User
-        r34.apiKey = r34Key
-        e621.user = e621User
-        e621.apiKey = e621Key
+    fun refreshCredentials(context: Context) {
+
+        r34.userId = SettingsStore.getSecureCredential(context, "r34_user")
+        r34.apiKey = SettingsStore.getSecureCredential(context, "r34_key")
+
+        e621.user = SettingsStore.getSecureCredential(context, "e621_user")
+        e621.apiKey = SettingsStore.getSecureCredential(context, "e621_key")
+
+        val boorus = listOf(
+            SourceType.GELBOORU to gelbooru,
+            SourceType.XBOORU to xbooru
+        )
+
+        boorus.forEach { (type, module) ->
+            val userKey = "${type.name}_user"
+            val passKey = "${type.name}_key"
+            module.userId = SettingsStore.getSecureCredential(context, userKey)
+            module.apiKey = SettingsStore.getSecureCredential(context, passKey)
+        }
     }
 }

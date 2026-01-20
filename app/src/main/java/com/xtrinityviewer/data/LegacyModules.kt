@@ -172,16 +172,15 @@ class RedditModuleWrapper : SiteModule {
     override val name = "Reddit"
 
     override suspend fun getPosts(page: Int, tags: List<String>, filter: FileFilter): List<UnifiedPost> {
-        return if (tags.isEmpty()) {
-            RedditModule.getPosts(page, "popular")
-        } else {
-            RedditModule.getPosts(page, tags[0])
-        }
+        return RedditModule.getPosts(page, tags, filter)
     }
 
     override suspend fun resolveDirectLink(post: UnifiedPost): String {
-        val cleanUrl = post.url.replace("&amp;", "&")
+        if (post.type == MediaType.VIDEO || post.type == MediaType.GIF || post.url.contains("redgifs.com")) {
+            return post.url
+        }
 
+        val cleanUrl = post.url.replace("&amp;", "&")
         val isDirectImage = cleanUrl.contains("preview.redd.it") ||
                 cleanUrl.contains("i.redd.it") ||
                 cleanUrl.contains("external-preview")

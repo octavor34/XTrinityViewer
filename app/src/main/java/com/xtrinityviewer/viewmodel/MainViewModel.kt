@@ -98,7 +98,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             Log.d("TrinityDebug", "2. Esperando a que el servidor responda...")
-            job.join() // <--- ESTA ES LA CLAVE. Esperamos a que 'feed' se actualice.
+            job.join()
 
             Log.d("TrinityDebug", "3. Carga finalizada. Nuevo tamaño Feed: ${_feed.value.size}")
 
@@ -125,13 +125,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun reloadCredentials(context: Context) {
-        val creds = SettingsStore.getCredentials(context)
-        SourceManager.updateCredentials(
-            r34User = creds["r34_user"] ?: "",
-            r34Key = creds["r34_key"] ?: "",
-            e621User = creds["e621_user"] ?: "",
-            e621Key = creds["e621_key"] ?: ""
-        )
+        SourceManager.refreshCredentials(context)
         BlacklistManager.init(context)
         resetAndReload()
     }
@@ -313,18 +307,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
     fun addTag(tag: String) {
         val clean = tag.trim()
         if (clean.isBlank()) return
         val current = _tagsList.value.toMutableList()
 
         if (_currentSource.value == SourceType.REDDIT) {
-           if (clean.startsWith("r/")) {
+
+            if (clean.startsWith("r/")) {
                 current.clear()
             }
-            else if (current.isNotEmpty()) {
-                if (current.size >= 2) {
-                    current.removeAt(1)
+            else {
+                if (current.isNotEmpty()) {
+                    if (current.size >= 2) {
+                        current.removeAt(1)
+                    }
+                } else {
+                    current.clear()
                 }
             }
         }

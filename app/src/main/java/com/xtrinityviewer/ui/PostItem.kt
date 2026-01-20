@@ -46,7 +46,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.material.icons.filled.Download // o Save
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Apps
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)

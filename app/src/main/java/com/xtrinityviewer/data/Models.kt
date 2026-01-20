@@ -1,6 +1,6 @@
 package com.xtrinityviewer.data
 
-enum class SourceType { R34, REDDIT, CHAN, EHENTAI, E621, REALBOORU, VERCOMICS }
+enum class SourceType { R34, REDDIT, CHAN, EHENTAI, E621, REALBOORU, VERCOMICS, GELBOORU, XBOORU, FURRYBOORU, R34XYZ }
 
 enum class MediaType { IMAGE, GIF, VIDEO, GALLERY }
 
@@ -173,4 +173,49 @@ data class RedditSubredditData(
     val display_name: String?,
     val display_name_prefixed: String?,
     val subscribers: Long?
+)
+
+data class RedGifsTokenResponse(
+    val token: String,
+    val addr: String,
+    val agent: String,
+    val rtmp_addr: String
+)
+
+data class RedGifsResponse(
+    val gifs: List<RedGifsGif>?,
+    val page: Int?,
+    val pages: Int?,
+    val total: Int?
+)
+
+data class RedGifsGif(
+    val id: String,
+    val urls: RedGifsUrls?,
+    val preview: String?,
+    val tags: List<String>?,
+    val type: Int?,
+    val width: Int?,
+    val height: Int?
+)
+
+data class RedGifsUrls(
+    val sd: String?,
+    val hd: String?,
+    val poster: String?,
+    val thumbnail: String?,
+    val vthumbnail: String?
+)
+
+data class RedGifsSingleResponse(
+    val gif: RedGifsGif?
+)
+
+data class RedGifsTagsResponse(
+    val tags: List<RedGifsTagSuggestion>?
+)
+
+data class RedGifsTagSuggestion(
+    val name: String,
+    val count: Int
 )

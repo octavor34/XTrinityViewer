@@ -49,6 +49,8 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.xtrinityviewer.util.VideoCacheManager
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import okhttp3.OkHttpClient
 
 private enum class SeekAction { NONE, FORWARD, REWIND }
 
@@ -61,14 +63,21 @@ fun VideoPlayer(
     autoPlay: Boolean = false,
     headers: Map<String, String> = emptyMap(),
     onPlayingChange: (Boolean) -> Unit = {},
-    onLongPress: () -> Unit = {},
     onControllerVisibilityChanged: (Boolean) -> Unit = {}
 ) {
 
     val context = LocalContext.current
     val activity = context as? Activity
     val scope = rememberCoroutineScope()
-    val optimizedUrl = remember(url) { Optimizer.optimize(url) }
+    val finalUrl = url
+
+    if (finalUrl.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+            Text("URL de video vacía", color = Color.White)
+        }
+        return
+    }
+    val optimizedUrl = remember(finalUrl) { Optimizer.optimize(finalUrl) }
     var isLoading by remember { mutableStateOf(true) }
     var isFullscreen by remember { mutableStateOf(false) }
     var isPlayingState by remember { mutableStateOf(false) }
@@ -107,10 +116,31 @@ fun VideoPlayer(
         }
     }
 
-    val exoPlayer = remember {
-        val cacheDataSourceFactory = VideoCacheManager.getDataSourceFactory(context)
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(cacheDataSourceFactory)
+    val exoPlayer = remember(optimizedUrl) {
+        val mediaSourceFactory = if (optimizedUrl.contains("redgifs.com")) {
+            val okHttpClient = OkHttpClient.Builder()
+                .followRedirects(true)
+                .followSslRedirects(true)
+                .addNetworkInterceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .header("Referer", "https://www.redgifs.com/")
+                        .header("Origin", "https://www.redgifs.com")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        .build()
+                    chain.proceed(request)
+                }
+                .build()
+
+            val okHttpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient)
+
+            DefaultMediaSourceFactory(context)
+                .setDataSourceFactory(okHttpDataSourceFactory)
+        } else {
+            val cacheDataSourceFactory = VideoCacheManager.getDataSourceFactory(context)
+            DefaultMediaSourceFactory(context)
+                .setDataSourceFactory(cacheDataSourceFactory)
+        }
+
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .build()
@@ -195,7 +225,7 @@ fun VideoPlayer(
         if (isVisible && autoPlay) exoPlayer.play() else exoPlayer.pause()
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }
     }
 

@@ -55,7 +55,7 @@ fun CrashScreen(errorMsg: String, onRestart: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D0D0D)) // Fondo casi negro
+            .background(Color(0xFF0D0D0D))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

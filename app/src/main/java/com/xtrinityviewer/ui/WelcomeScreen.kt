@@ -45,7 +45,6 @@ fun WelcomeScreen(onStartClick: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Logo
             Surface(
                 shape = CircleShape,
                 color = Color(0xFFC0CA33).copy(alpha = 0.1f),

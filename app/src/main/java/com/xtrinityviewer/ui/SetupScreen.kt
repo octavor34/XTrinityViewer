@@ -1,6 +1,7 @@
 package com.xtrinityviewer.ui
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -154,17 +155,11 @@ fun SetupScreen(onFinished: () -> Unit, onCancel: () -> Unit) {
 
             Text("Rule34", color = Color(0xFF8BC34A), fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
 
-            SecretField(value = r34User, onValueChange = { r34User = it }, label = "User ID", color = Color(0xFF8BC34A))
-            Spacer(Modifier.height(4.dp))
-            SecretField(value = r34Key, onValueChange = { r34Key = it }, label = "API Key", color = Color(0xFF8BC34A))
+            Text("Configuración de Cuentas", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(Modifier.height(16.dp))
-
-            Text("E621", color = Color(0xFF003E6B), fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-            SecretField(value = e621User, onValueChange = { e621User = it }, label = "Username", color = Color(0xFF003E6B))
-            Spacer(Modifier.height(4.dp))
-            SecretField(value = e621Key, onValueChange = { e621Key = it }, label = "API Key", color = Color(0xFF003E6B))
-
+            ApiConfigCard(context = context) {
+            }
             Spacer(Modifier.height(24.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -426,4 +421,128 @@ fun SecretField(
             }
         }
     )
+}
+@Composable
+fun ApiConfigCard(
+    context: android.content.Context,
+    onCredentialsSaved: () -> Unit
+) {
+    // 1. Lista de sitios disponibles
+    val apiSites = remember {
+        listOf(
+            SourceType.R34,
+            SourceType.E621,
+            SourceType.GELBOORU,
+        )
+    }
+
+    // 2. Estados
+    var expanded by remember { mutableStateOf(false) }
+    var selectedSource by remember { mutableStateOf(SourceType.R34) }
+    var userId by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf("") }
+
+    val prefs = remember { context.getSharedPreferences("trinity_settings", android.content.Context.MODE_PRIVATE) }
+
+    // 3. FUNCIÓN PARA OBTENER LAS CLAVES CORRECTAS (Mantiene compatibilidad)
+    fun getPrefKeys(source: SourceType): Pair<String, String> {
+        return when (source) {
+            SourceType.R34 -> "r34_user" to "r34_key"      // Mantiene tus claves antiguas
+            SourceType.E621 -> "e621_user" to "e621_key"   // Mantiene tus claves antiguas
+            else -> "${source.name}_user" to "${source.name}_key" // Genera nuevas: GELBOORU_user, etc.
+        }
+    }
+
+    // 4. Cargar datos al cambiar de sitio
+    LaunchedEffect(selectedSource) {
+        val (userKey, passKey) = getPrefKeys(selectedSource)
+
+        userId = SettingsStore.getSecureCredential(context, userKey)
+        apiKey = SettingsStore.getSecureCredential(context, passKey)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Gestor de APIs", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Configura tus cuentas para acceder a contenido completo.", color = Color.Gray, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Selector de Sitio
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = BorderStroke(1.dp, Color.Gray)
+                ) {
+                    Text(selectedSource.name)
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.Default.ArrowDropDown, null)
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                    modifier = Modifier.background(Color(0xFF252525))
+                ) {
+                    apiSites.forEach { site ->
+                        DropdownMenuItem(
+                            text = { Text(site.name, color = Color.White) },
+                            onClick = { selectedSource = site; expanded = false }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Campos de Texto
+            OutlinedTextField(
+                value = userId,
+                onValueChange = { userId = it },
+                label = { Text("Usuario / ID") },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color(0xFF111111),
+                    unfocusedContainerColor = Color(0xFF111111),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedLabelColor = Color(0xFFFFDD00),
+                    unfocusedLabelColor = Color.Gray
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            SecretField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = "API Key / Hash",
+                color = Color(0xFFFFDD00)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = {
+                    val (userKey, passKey) = getPrefKeys(selectedSource)
+
+                    SettingsStore.saveSecureCredential(context, userKey, userId.trim())
+                    SettingsStore.saveSecureCredential(context, passKey, apiKey.trim())
+
+                    Toast.makeText(context, "Guardado para ${selectedSource.name}", Toast.LENGTH_SHORT).show()
+                    onCredentialsSaved()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00AAFF))
+            ) {
+                Icon(Icons.Default.Save, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("GUARDAR DATOS", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }

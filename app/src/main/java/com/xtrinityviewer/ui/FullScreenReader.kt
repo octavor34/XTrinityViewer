@@ -266,15 +266,22 @@ fun FullScreenReader(
                     if (realUrl.isNotEmpty()) {
                         if (resolvedType == MediaType.VIDEO) {
                             if (isPageVisible) isZoomActive = false
+                            var isVideoPlaying by remember { mutableStateOf(false) }
                             VideoPlayer(
                                 url = realUrl,
                                 isVisible = isPageVisible,
                                 showControls = false,
                                 autoPlay = false,
                                 headers = requestHeaders,
-                                onPlayingChange = { isPlaying -> },
+                                onPlayingChange = { playing ->
+                                    isVideoPlaying = playing
+                                    if (isPageVisible) {
+                                        showOverlay = !playing
+                                    } },
                                 onControllerVisibilityChanged = { visible ->
-                                    if (isPageVisible) showOverlay = visible
+                                    if (isPageVisible && !isVideoPlaying) {
+                                        showOverlay = visible
+                                    }
                                 }
                             )
                         } else {
@@ -340,8 +347,7 @@ fun FullScreenReader(
                     }
 
                     OverlayInfo(
-                        post = posts.getOrNull(pagerState.currentPage),
-                        onBack = { onBack(pagerState.currentPage) }
+                        post = posts.getOrNull(pagerState.currentPage)
                     )
                 }
             }
@@ -455,7 +461,7 @@ fun ZoomableImageContainer(
 }
 
 @Composable
-fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
+fun BoxScope.OverlayInfo(post: UnifiedPost?) {
     if (post == null) return
 
     val isCleanMode = post.source == SourceType.R34 ||
@@ -480,18 +486,15 @@ fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
             .padding(16.dp)
             .padding(bottom = 20.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val sourceColor = when(post.source) {
-                    SourceType.EHENTAI -> Color(0xFFE91E63)
-                    SourceType.REALBOORU -> Color(0xFFFF9800)
-                    SourceType.E621 -> Color(0xFF003E6B)
-                    SourceType.CHAN -> Color(0xFF1B5E20)
-                    SourceType.REDDIT -> Color(0xFFFF5700)
-                    else -> Color(0xFFAAE5A4)
-                }
-                Badge(text = post.source.name, color = sourceColor)
+            if (post.source != SourceType.CHAN) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val sourceColor = when(post.source) {
+                        SourceType.REDDIT -> Color(0xFFFF5700)
+                        SourceType.CHAN -> Color(0xFF1B5E20)
+                        else -> Color(0xFFAAE5A4)
+                    }
+                    Badge(text = post.source.name, color = sourceColor)
 
-                if (!isCleanMode) {
                     Spacer(modifier = Modifier.width(8.dp))
 
                     val typeName = when(post.type) {
@@ -501,18 +504,16 @@ fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
                         else -> "IMG"
                     }
                     Badge(text = typeName, color = Color.Gray)
-
-                    if (post.source == SourceType.CHAN) {
-                        val replyTag = post.tags.find { it.startsWith("R:") }
-                        if (replyTag != null) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Badge(text = "${replyTag.removePrefix("R:")} Posts", color = Color(0xFFFFD600))
-                        }
-                    }
                 }
             }
-            if (!isCleanMode && post.title.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
+
+            // [TÍTULO] Se muestra siempre (porque ya pasamos el isCleanMode arriba)
+            if (post.title.isNotBlank()) {
+                // Solo ponemos el Spacer si NO es CHAN (porque en CHAN no hubo badges arriba)
+                if (post.source != SourceType.CHAN) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 Text(
                     text = post.title,
                     color = Color.White,
@@ -524,12 +525,6 @@ fun BoxScope.OverlayInfo(post: UnifiedPost?, onBack: () -> Unit) {
             }
         }
     }
-}
-
-@Composable
-fun ReaderBadge(text: String, color: Color) {
-    val textColor = if (color == Color(0xFFAAE5A4)) Color.Black else Color.White
-    Text(text = text, color = textColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.background(color, MaterialTheme.shapes.small).padding(horizontal = 6.dp, vertical = 2.dp))
 }
 
 suspend fun PointerInputScope.detectTransformGesturesAndTap(
